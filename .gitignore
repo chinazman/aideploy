@@ -1,0 +1,55 @@
+# 编译输出
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+deploy-server
+deploy-cli
+
+# 配置文件（包含敏感信息）
+config.json
+
+# 网站数据
+websites/
+
+# Go
+*.test
+*.out
+go.work
+
+# 依赖
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+deploy-*.tmp
+
+# Node.js (frontend)
+client/frontend/node_modules/
+client/frontend/dist/
+client/frontend/.vite/
+
+# Wails
+client/frontend/wailsjs/
+client/build/
+client/wails_build.log
+
+# 备份文件
+*.bak
+*.backup

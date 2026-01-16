@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>示例原型 - AI生成</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 40px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin: 40px 0;
+        }
+
+        .feature {
+            padding: 30px;
+            background: #f8f9ff;
+            border-radius: 12px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+
+        .feature:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+
+        .feature h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+
+        .feature p {
+            color: #666;
+            line-height: 1.8;
+        }
+
+        .cta {
+            text-align: center;
+            margin: 40px 0;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9ff;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 AI原型快速部署工具</h1>
+            <p>这是一个示例原型页面，用于测试部署功能</p>
+        </header>
+
+        <div class="content">
+            <h2 style="text-align: center; margin-bottom: 40px; color: #333;">核心功能特性</h2>
+
+            <div class="features">
+                <div class="feature">
+                    <h3>⚡ 快速部署</h3>
+                    <p>一键上传HTML文件，立即发布到服务器，无需复杂配置，让产品人员专注于原型设计。</p>
+                </div>
+
+                <div class="feature">
+                    <h3>📜 版本管理</h3>
+                    <p>基于Git的版本控制系统，自动记录每次部署，随时查看历史版本，支持一键回滚。</p>
+                </div>
+
+                <div class="feature">
+                    <h3>🎯 简单易用</h3>
+                    <p>直观的图形界面和命令行工具，无需了解服务器知识，3分钟即可上手使用。</p>
+                </div>
+
+                <div class="feature">
+                    <h3>🌐 灵活部署</h3>
+                    <p>支持子域名和路径两种部署模式，满足不同场景需求，轻松管理多个原型项目。</p>
+                </div>
+            </div>
+
+            <div class="cta">
+                <a href="#" class="btn">开始使用</a>
+            </div>
+
+            <div style="background: #f0f2ff; padding: 30px; border-radius: 12px; border-left: 4px solid #667eea;">
+                <h3 style="color: #667eea; margin-bottom: 15px;">💡 使用提示</h3>
+                <p style="color: #666; line-height: 1.8;">
+                    这个HTML文件是一个示例原型。您可以使用AI工具（如ChatGPT、Claude等）生成自己的原型页面，
+                    然后通过部署工具快速发布。每次部署都会自动创建版本记录，支持随时回滚到历史版本。
+                </p>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2025 AI原型快速部署工具 | 由AI生成并快速部署</p>
+        </footer>
+    </div>
+</body>
+</html>

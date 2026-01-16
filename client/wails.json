@@ -1,0 +1,22 @@
+{
+  "name": "aideploy-client",
+  "outputfilename": "AI原型部署工具",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "AI Deploy",
+    "email": "info@example.com"
+  },
+  "info": {
+    "companyName": "AI Deploy",
+    "productName": "AI原型部署工具",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright............",
+    "comments": "快速部署AI生成的HTML原型"
+  },
+  "wailsjsdir": "./frontend/wailsjs",
+  "version": "2",
+  "outputType": "desktop"
+}
