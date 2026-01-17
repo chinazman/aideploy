@@ -17,12 +17,13 @@ import (
 
 // Config 服务器配置
 type Config struct {
-	BaseDomain      string `json:"base_domain"`      // 基础域名（子域名模式）
-	WebRoot         string `json:"web_root"`         // 网站根目录
-	Mode            string `json:"mode"`             // 部署模式：subdomain 或 path
-	SingleDomain    string `json:"single_domain"`    // 单域名模式下的域名
-	Port            int    `json:"port"`             // 服务器端口
+	BaseDomain       string `json:"base_domain"`       // 基础域名（子域名模式）
+	WebRoot          string `json:"web_root"`          // 网站根目录
+	Mode             string `json:"mode"`              // 部署模式：subdomain 或 path
+	SingleDomain     string `json:"single_domain"`     // 单域名模式下的域名
+	Port             int    `json:"port"`              // 服务器端口
 	EnableVersioning bool   `json:"enable_versioning"` // 是否启用版本控制
+	APIKey           string `json:"api_key"`           // API密钥（可选，为空则不验证）
 }
 
 // Website 网站信息
@@ -69,15 +70,15 @@ func (s *DeployServer) Start() error {
 	mux := http.NewServeMux()
 
 	// API路由
-	mux.HandleFunc("/api/sites", s.corsMiddleware(s.handleSites))
-	mux.HandleFunc("/api/sites/create", s.corsMiddleware(s.handleCreateSite))
-	mux.HandleFunc("/api/sites/delete", s.corsMiddleware(s.handleDeleteSite))
-	mux.HandleFunc("/api/sites/deploy", s.corsMiddleware(s.handleDeploy))
-	mux.HandleFunc("/api/sites/deploy-full", s.corsMiddleware(s.handleDeployFull)) // 全量部署
-	mux.HandleFunc("/api/sites/deploy-incremental", s.corsMiddleware(s.handleDeployIncremental)) // 增量部署
-	mux.HandleFunc("/api/sites/versions", s.corsMiddleware(s.handleVersions))
-	mux.HandleFunc("/api/sites/rollback", s.corsMiddleware(s.handleRollback))
-	mux.HandleFunc("/api/sites/list", s.corsMiddleware(s.handleListSites))
+	mux.HandleFunc("/api/sites", s.corsMiddleware(s.authMiddleware(s.handleSites)))
+	mux.HandleFunc("/api/sites/create", s.corsMiddleware(s.authMiddleware(s.handleCreateSite)))
+	mux.HandleFunc("/api/sites/delete", s.corsMiddleware(s.authMiddleware(s.handleDeleteSite)))
+	mux.HandleFunc("/api/sites/deploy", s.corsMiddleware(s.authMiddleware(s.handleDeploy)))
+	mux.HandleFunc("/api/sites/deploy-full", s.corsMiddleware(s.authMiddleware(s.handleDeployFull))) // 全量部署
+	mux.HandleFunc("/api/sites/deploy-incremental", s.corsMiddleware(s.authMiddleware(s.handleDeployIncremental))) // 增量部署
+	mux.HandleFunc("/api/sites/versions", s.corsMiddleware(s.authMiddleware(s.handleVersions)))
+	mux.HandleFunc("/api/sites/rollback", s.corsMiddleware(s.authMiddleware(s.handleRollback)))
+	mux.HandleFunc("/api/sites/list", s.corsMiddleware(s.authMiddleware(s.handleListSites)))
 
 	// 创建静态文件处理器
 	var staticHandler http.Handler
@@ -121,13 +122,37 @@ func (s *DeployServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
+		next(w, r)
+	}
+}
+
+// authMiddleware API密钥验证中间件
+func (s *DeployServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 如果配置了API密钥，则进行验证
+		if s.config.APIKey != "" {
+			// 从请求头获取API密钥
+			providedKey := r.Header.Get("X-API-Key")
+
+			// 验证密钥
+			if providedKey != s.config.APIKey {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "未授权：无效的API密钥",
+				})
+				return
+			}
+		}
+
+		// 如果没有配置API密钥或密钥验证通过，继续处理请求
 		next(w, r)
 	}
 }

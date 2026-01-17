@@ -2,11 +2,14 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +19,7 @@ import (
 // Deployer 部署器
 type Deployer struct {
 	serverURL   string
+	apiKey      string
 	siteName    string
 	trackingDir string // 跟踪文件目录
 }
@@ -41,8 +45,16 @@ func NewDeployer(serverURL, siteName string) *Deployer {
 	homeDir, _ := os.UserHomeDir()
 	trackingDir := filepath.Join(homeDir, ".aideploy", "tracking")
 
+	// 加载配置以获取API密钥
+	config, err := LoadConfig()
+	apiKey := ""
+	if err == nil {
+		apiKey = config.APIKey
+	}
+
 	return &Deployer{
 		serverURL:   serverURL,
+		apiKey:      apiKey,
 		siteName:    siteName,
 		trackingDir: trackingDir,
 	}
@@ -62,12 +74,18 @@ func (d *Deployer) DeployFull(sitePath, message string) error {
 	tempFile.Close()
 
 	// 打包整个目录
+	fmt.Printf("正在打包目录: %s\n", sitePath)
 	if err := d.createPackage(sitePath, tempPath, nil); err != nil {
 		return fmt.Errorf("打包失败: %v", err)
 	}
 
+	// 显示包文件大小
+	if info, err := os.Stat(tempPath); err == nil {
+		fmt.Printf("打包完成，包大小: %.2f MB\n", float64(info.Size())/1024/1024)
+	}
+
 	// 上传到服务器
-	url := fmt.Sprintf("%s/api/sites/deploy-full", d.serverURL)
+	url := fmt.Sprintf("%s/sites/deploy-full", d.serverURL)
 	if err := d.uploadPackage(url, tempPath, message); err != nil {
 		return fmt.Errorf("上传失败: %v", err)
 	}
@@ -125,7 +143,7 @@ func (d *Deployer) DeployIncremental(sitePath, message string) error {
 	}
 
 	// 上传到服务器
-	url := fmt.Sprintf("%s/api/sites/deploy-incremental", d.serverURL)
+	url := fmt.Sprintf("%s/sites/deploy-incremental", d.serverURL)
 	if err := d.uploadPackage(url, tempPath, message); err != nil {
 		return fmt.Errorf("上传失败: %v", err)
 	}
@@ -264,14 +282,22 @@ func (d *Deployer) createPackage(sitePath, packagePath string, files []FileStatu
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
 
+	fileCount := 0
+	dirCount := 0
+
 	// 如果没有指定文件列表，打包所有文件
 	if len(files) == 0 {
-		return filepath.Walk(sitePath, func(path string, info os.FileInfo, err error) error {
+		err := filepath.Walk(sitePath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 
-			// 跳过隐藏文件
+			// 跳过根目录本身
+			if path == sitePath {
+				return nil
+			}
+
+			// 跳过隐藏文件和目录（以"."开头的文件或目录）
 			if strings.HasPrefix(filepath.Base(path), ".") {
 				if info.IsDir() {
 					return filepath.SkipDir
@@ -279,8 +305,22 @@ func (d *Deployer) createPackage(sitePath, packagePath string, files []FileStatu
 				return nil
 			}
 
+			// 统计
+			if info.IsDir() {
+				dirCount++
+			} else {
+				fileCount++
+			}
+
 			return d.addToTar(tarWriter, path, sitePath, info)
 		})
+
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("已打包: %d 个文件, %d 个目录\n", fileCount, dirCount)
+		return nil
 	}
 
 	// 打包指定的文件
@@ -293,8 +333,10 @@ func (d *Deployer) createPackage(sitePath, packagePath string, files []FileStatu
 		if err := d.addToTar(tarWriter, fullPath, sitePath, info); err != nil {
 			return err
 		}
+		fileCount++
 	}
 
+	fmt.Printf("已打包: %d 个文件, %d 个目录\n", fileCount, dirCount)
 	return nil
 }
 
@@ -305,6 +347,9 @@ func (d *Deployer) addToTar(tarWriter *tar.Writer, filePath, baseDir string, inf
 	if err != nil {
 		return err
 	}
+
+	// 将路径分隔符统一转换为正斜杠（tar格式标准）
+	relPath = filepath.ToSlash(relPath)
 
 	// 创建tar头
 	header, err := tar.FileInfoHeader(info, "")
@@ -335,12 +380,72 @@ func (d *Deployer) addToTar(tarWriter *tar.Writer, filePath, baseDir string, inf
 
 // uploadPackage 上传部署包
 func (d *Deployer) uploadPackage(url, packagePath, message string) error {
-	// 这里需要实现multipart上传
-	// 为了简化，返回一个提示
-	fmt.Printf("上传包到: %s\n", url)
-	fmt.Printf("包文件: %s\n", packagePath)
-	fmt.Printf("消息: %s\n", message)
-	// TODO: 实现实际的HTTP上传
+	// 打开包文件
+	file, err := os.Open(packagePath)
+	if err != nil {
+		return fmt.Errorf("打开包文件失败: %v", err)
+	}
+	defer file.Close()
+
+	// 创建multipart请求body
+	var requestBody bytes.Buffer
+	writer := multipart.NewWriter(&requestBody)
+
+	// 添加name字段
+	if err := writer.WriteField("name", d.siteName); err != nil {
+		return fmt.Errorf("写入name字段失败: %v", err)
+	}
+
+	// 添加message字段
+	if err := writer.WriteField("message", message); err != nil {
+		return fmt.Errorf("写入message字段失败: %v", err)
+	}
+
+	// 添加package文件
+	part, err := writer.CreateFormFile("package", filepath.Base(packagePath))
+	if err != nil {
+		return fmt.Errorf("创建文件字段失败: %v", err)
+	}
+
+	if _, err := io.Copy(part, file); err != nil {
+		return fmt.Errorf("复制文件内容失败: %v", err)
+	}
+
+	// 关闭writer以完成multipart写入
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("关闭writer失败: %v", err)
+	}
+
+	// 创建HTTP请求
+	req, err := http.NewRequest("POST", url, &requestBody)
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %v", err)
+	}
+
+	// 设置Content-Type头
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// 如果配置了API密钥，添加到请求头
+	if d.apiKey != "" {
+		req.Header.Set("X-API-Key", d.apiKey)
+	}
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("发送请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	body, _ := io.ReadAll(resp.Body)
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("服务器返回错误: %s", string(body))
+	}
+
 	return nil
 }
 

@@ -47,12 +47,26 @@ func main() {
 // App 应用结构
 type App struct {
 	apiBaseURL string
+	apiKey     string
 }
 
 // NewApp 创建应用实例
 func NewApp() *App {
+	// 从配置文件加载服务端地址和API密钥
+	config, err := LoadConfig()
+	apiBaseURL := "http://localhost:8080/api"
+	apiKey := ""
+
+	if err == nil {
+		if config.ServerURL != "" {
+			apiBaseURL = config.ServerURL
+		}
+		apiKey = config.APIKey
+	}
+
 	return &App{
-		apiBaseURL: "http://localhost:8080/api",
+		apiBaseURL: apiBaseURL,
+		apiKey:     apiKey,
 	}
 }
 
@@ -84,6 +98,13 @@ type Version struct {
 	Date    string `json:"date"`
 }
 
+// addAPIKeyToRequest 如果配置了API密钥，则添加到请求头
+func (a *App) addAPIKeyToRequest(req *http.Request) {
+	if a.apiKey != "" {
+		req.Header.Set("X-API-Key", a.apiKey)
+	}
+}
+
 // CreateSite 创建网站
 func (a *App) CreateSite(name string) (*Website, error) {
 	payload := map[string]string{
@@ -91,7 +112,16 @@ func (a *App) CreateSite(name string) (*Website, error) {
 	}
 
 	data, _ := json.Marshal(payload)
-	resp, err := http.Post(a.apiBaseURL+"/sites/create", "application/json", strings.NewReader(string(data)))
+	req, err := http.NewRequest("POST", a.apiBaseURL+"/sites/create", strings.NewReader(string(data)))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAPIKeyToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +148,16 @@ func (a *App) DeleteSite(name string) error {
 	}
 
 	data, _ := json.Marshal(payload)
-	resp, err := http.Post(a.apiBaseURL+"/sites/delete", "application/json", strings.NewReader(string(data)))
+	req, err := http.NewRequest("POST", a.apiBaseURL+"/sites/delete", strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAPIKeyToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -141,7 +180,15 @@ func (a *App) DeploySite(name, filePath, message string) error {
 
 // ListSites 列出所有网站
 func (a *App) ListSites() ([]string, error) {
-	resp, err := http.Get(a.apiBaseURL + "/sites/list")
+	req, err := http.NewRequest("GET", a.apiBaseURL+"/sites/list", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	a.addAPIKeyToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +223,15 @@ func (a *App) ListSites() ([]string, error) {
 // GetVersions 获取版本列表
 func (a *App) GetVersions(name string) ([]Version, error) {
 	url := fmt.Sprintf("%s/sites/versions?name=%s", a.apiBaseURL, name)
-	resp, err := http.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	a.addAPIKeyToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +264,16 @@ func (a *App) Rollback(name, hash, message string) error {
 	}
 
 	data, _ := json.Marshal(payload)
-	resp, err := http.Post(a.apiBaseURL+"/sites/rollback", "application/json", strings.NewReader(string(data)))
+	req, err := http.NewRequest("POST", a.apiBaseURL+"/sites/rollback", strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAPIKeyToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

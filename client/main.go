@@ -11,15 +11,22 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
-)
-
-const (
-	apiBaseURL = "http://localhost:8080/api"
 )
 
 func main() {
 	flag.Parse()
+
+	// 加载配置
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	apiBaseURL := config.ServerURL
+	apiKey := config.APIKey
 
 	args := flag.Args()
 	if len(args) < 1 {
@@ -30,22 +37,24 @@ func main() {
 	command := args[0]
 
 	switch command {
+	case "config":
+		handleConfig(args[1:])
 	case "create":
-		handleCreate(args[1:])
+		handleCreate(apiBaseURL, apiKey, args[1:])
 	case "delete":
-		handleDelete(args[1:])
+		handleDelete(apiBaseURL, apiKey, args[1:])
 	case "deploy":
-		handleDeploy(args[1:])
+		handleDeploy(apiBaseURL, apiKey, config, args[1:])
 	case "deploy-full":
-		handleDeployFull(args[1:])
+		handleDeployFull(apiBaseURL, apiKey, config, args[1:])
 	case "deploy-inc":
-		handleDeployIncremental(args[1:])
+		handleDeployIncremental(apiBaseURL, apiKey, config, args[1:])
 	case "list":
-		handleList(args[1:])
+		handleList(apiBaseURL, apiKey, args[1:])
 	case "versions":
-		handleVersions(args[1:])
+		handleVersions(apiBaseURL, apiKey, args[1:])
 	case "rollback":
-		handleRollback(args[1:])
+		handleRollback(apiBaseURL, apiKey, args[1:])
 	case "help":
 		printUsage()
 	default:
@@ -55,14 +64,49 @@ func main() {
 	}
 }
 
+// addAPIKeyToRequest 如果配置了API密钥，则添加到请求头
+func addAPIKeyToRequest(req *http.Request, apiKey string) {
+	if apiKey != "" {
+		req.Header.Set("X-API-Key", apiKey)
+	}
+}
+
+// postJSON 发送POST请求（带JSON body和可选的API密钥）
+func postJSON(url string, body []byte, apiKey string) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	addAPIKeyToRequest(req, apiKey)
+
+	client := &http.Client{}
+	return client.Do(req)
+}
+
+// getJSON 发送GET请求（带可选的API密钥）
+func getJSON(url string, apiKey string) (*http.Response, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	addAPIKeyToRequest(req, apiKey)
+
+	client := &http.Client{}
+	return client.Do(req)
+}
+
 func printUsage() {
 	fmt.Println("AI原型快速部署工具 - 命令行客户端")
 	fmt.Println("\n用法:")
 	fmt.Println("  deploy-cli <command> [arguments]")
 	fmt.Println("\n命令:")
+	fmt.Println("  config                管理配置（服务器地址、API密钥、网站目录）")
 	fmt.Println("  create <name>          创建新网站")
 	fmt.Println("  delete <name>          删除网站")
-	fmt.Println("  deploy <name> <dir>    部署网站（智能选择增量或全量）")
+	fmt.Println("  deploy <name> [dir]    部署网站（智能选择增量或全量）")
 	fmt.Println("  deploy-full <name>     全量部署网站")
 	fmt.Println("  deploy-inc <name>      增量部署网站")
 	fmt.Println("  list                   列出所有网站")
@@ -70,15 +114,18 @@ func printUsage() {
 	fmt.Println("  rollback <name> <hash> 回滚到指定版本")
 	fmt.Println("  help                   显示帮助信息")
 	fmt.Println("\n示例:")
+	fmt.Println("  deploy-cli config set server http://192.168.1.100:8080/api")
+	fmt.Println("  deploy-cli config set api-key your-secret-key")
+	fmt.Println("  deploy-cli config set site my-prototype ./dist")
+	fmt.Println("  deploy-cli config get")
 	fmt.Println("  deploy-cli create my-prototype")
+	fmt.Println("  deploy-cli deploy my-prototype")
 	fmt.Println("  deploy-cli deploy my-prototype ./dist")
-	fmt.Println("  deploy-cli deploy-full my-prototype ./dist")
-	fmt.Println("  deploy-cli deploy-inc my-prototype ./dist")
 	fmt.Println("  deploy-cli versions my-prototype")
 	fmt.Println("  deploy-cli rollback my-prototype abc123")
 }
 
-func handleCreate(args []string) {
+func handleCreate(apiBaseURL, apiKey string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 请提供网站名称")
 		fmt.Println("用法: deploy-cli create <name>")
@@ -97,7 +144,7 @@ func handleCreate(args []string) {
 		os.Exit(1)
 	}
 
-	resp, err := http.Post(apiBaseURL+"/sites/create", "application/json", strings.NewReader(string(data)))
+	resp, err := postJSON(apiBaseURL+"/sites/create", data, apiKey)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -126,7 +173,7 @@ func handleCreate(args []string) {
 	}
 }
 
-func handleDelete(args []string) {
+func handleDelete(apiBaseURL, apiKey string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 请提供网站名称")
 		fmt.Println("用法: deploy-cli delete <name>")
@@ -155,7 +202,7 @@ func handleDelete(args []string) {
 		return
 	}
 
-	resp, err := http.Post(apiBaseURL+"/sites/delete", "application/json", strings.NewReader(string(data)))
+	resp, err := postJSON(apiBaseURL+"/sites/delete", data, apiKey)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -172,8 +219,8 @@ func handleDelete(args []string) {
 	fmt.Println("✓ 网站删除成功!")
 }
 
-func handleList(args []string) {
-	resp, err := http.Get(apiBaseURL + "/sites/list")
+func handleList(apiBaseURL, apiKey string, args []string) {
+	resp, err := getJSON(apiBaseURL+"/sites/list", apiKey)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -209,7 +256,7 @@ func handleList(args []string) {
 	fmt.Println(strings.Repeat("-", 50))
 }
 
-func handleVersions(args []string) {
+func handleVersions(apiBaseURL, apiKey string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 请提供网站名称")
 		fmt.Println("用法: deploy-cli versions <name>")
@@ -219,7 +266,7 @@ func handleVersions(args []string) {
 	name := args[0]
 
 	url := fmt.Sprintf("%s/sites/versions?name=%s", apiBaseURL, name)
-	resp, err := http.Get(url)
+	resp, err := getJSON(url, apiKey)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -257,7 +304,7 @@ func handleVersions(args []string) {
 	fmt.Println(strings.Repeat("-", 80))
 }
 
-func handleRollback(args []string) {
+func handleRollback(apiBaseURL, apiKey string, args []string) {
 	if len(args) < 2 {
 		fmt.Println("错误: 请提供网站名称和版本哈希")
 		fmt.Println("用法: deploy-cli rollback <name> <hash> [message]")
@@ -294,7 +341,7 @@ func handleRollback(args []string) {
 		return
 	}
 
-	resp, err := http.Post(apiBaseURL+"/sites/rollback", "application/json", strings.NewReader(string(data)))
+	resp, err := postJSON(apiBaseURL+"/sites/rollback", data, apiKey)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -312,19 +359,35 @@ func handleRollback(args []string) {
 }
 
 // handleDeploy 智能部署（自动选择增量或全量）
-func handleDeploy(args []string) {
-	if len(args) < 2 {
-		fmt.Println("错误: 请提供网站名称和目录路径")
-		fmt.Println("用法: deploy-cli deploy <name> <directory>")
+func handleDeploy(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+	if len(args) < 1 {
+		fmt.Println("错误: 请提供网站名称")
+		fmt.Println("用法: deploy-cli deploy <name> [directory]")
 		os.Exit(1)
 	}
 
 	name := args[0]
-	dirPath := args[1]
+	var dirPath string
 	message := "更新部署"
 
-	if len(args) > 2 {
-		message = strings.Join(args[2:], " ")
+	// 确定目录路径
+	if len(args) >= 2 {
+		// 命令行指定了目录
+		dirPath = args[1]
+		if len(args) > 2 {
+			message = strings.Join(args[2:], " ")
+		}
+	} else {
+		// 从配置读取目录
+		var ok bool
+		dirPath, ok = config.SitePaths[name]
+		if !ok || dirPath == "" {
+			fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+			fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+			fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+			fmt.Printf("  deploy-cli deploy %s ./dist\n", name)
+			os.Exit(1)
+		}
 	}
 
 	// 检查目录是否存在
@@ -344,19 +407,33 @@ func handleDeploy(args []string) {
 }
 
 // handleDeployFull 全量部署
-func handleDeployFull(args []string) {
-	if len(args) < 2 {
-		fmt.Println("错误: 请提供网站名称和目录路径")
-		fmt.Println("用法: deploy-cli deploy-full <name> <directory>")
+func handleDeployFull(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+	if len(args) < 1 {
+		fmt.Println("错误: 请提供网站名称")
+		fmt.Println("用法: deploy-cli deploy-full <name> [directory]")
 		os.Exit(1)
 	}
 
 	name := args[0]
-	dirPath := args[1]
+	var dirPath string
 	message := "全量部署"
 
-	if len(args) > 2 {
-		message = strings.Join(args[2:], " ")
+	// 确定目录路径
+	if len(args) >= 2 {
+		dirPath = args[1]
+		if len(args) > 2 {
+			message = strings.Join(args[2:], " ")
+		}
+	} else {
+		var ok bool
+		dirPath, ok = config.SitePaths[name]
+		if !ok || dirPath == "" {
+			fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+			fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+			fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+			fmt.Printf("  deploy-cli deploy-full %s ./dist\n", name)
+			os.Exit(1)
+		}
 	}
 
 	// 检查目录是否存在
@@ -376,19 +453,33 @@ func handleDeployFull(args []string) {
 }
 
 // handleDeployIncremental 增量部署
-func handleDeployIncremental(args []string) {
-	if len(args) < 2 {
-		fmt.Println("错误: 请提供网站名称和目录路径")
-		fmt.Println("用法: deploy-cli deploy-inc <name> <directory>")
+func handleDeployIncremental(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+	if len(args) < 1 {
+		fmt.Println("错误: 请提供网站名称")
+		fmt.Println("用法: deploy-cli deploy-inc <name> [directory]")
 		os.Exit(1)
 	}
 
 	name := args[0]
-	dirPath := args[1]
+	var dirPath string
 	message := "增量部署"
 
-	if len(args) > 2 {
-		message = strings.Join(args[2:], " ")
+	// 确定目录路径
+	if len(args) >= 2 {
+		dirPath = args[1]
+		if len(args) > 2 {
+			message = strings.Join(args[2:], " ")
+		}
+	} else {
+		var ok bool
+		dirPath, ok = config.SitePaths[name]
+		if !ok || dirPath == "" {
+			fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+			fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+			fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+			fmt.Printf("  deploy-cli deploy-inc %s ./dist\n", name)
+			os.Exit(1)
+		}
 	}
 
 	// 检查目录是否存在
@@ -405,4 +496,231 @@ func handleDeployIncremental(args []string) {
 		fmt.Printf("部署失败: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// handleConfig 处理配置命令
+func handleConfig(args []string) {
+	if len(args) < 1 {
+		printConfigHelp()
+		os.Exit(1)
+	}
+
+	subCommand := args[0]
+
+	switch subCommand {
+	case "set":
+		handleConfigSet(args[1:])
+	case "get":
+		handleConfigGet()
+	case "remove":
+		handleConfigRemove(args[1:])
+	default:
+		fmt.Printf("未知配置命令: %s\n", subCommand)
+		printConfigHelp()
+		os.Exit(1)
+	}
+}
+
+// printConfigHelp 打印配置命令帮助
+func printConfigHelp() {
+	fmt.Println("配置管理命令")
+	fmt.Println("\n用法:")
+	fmt.Println("  deploy-cli config <sub-command> [arguments]")
+	fmt.Println("\n子命令:")
+	fmt.Println("  set server <url>      设置服务器地址")
+	fmt.Println("  set api-key <key>     设置API密钥")
+	fmt.Println("  set site <name> <dir> 设置网站发布目录")
+	fmt.Println("  get                   查看当前配置")
+	fmt.Println("  remove site <name>    移除网站发布目录")
+	fmt.Println("\n示例:")
+	fmt.Println("  deploy-cli config set server http://192.168.1.100:8080/api")
+	fmt.Println("  deploy-cli config set api-key my-secret-key")
+	fmt.Println("  deploy-cli config set site my-prototype ./dist")
+	fmt.Println("  deploy-cli config set site my-project /path/to/dist")
+	fmt.Println("  deploy-cli config get")
+	fmt.Println("  deploy-cli config remove site my-prototype")
+}
+
+// handleConfigSet 设置配置值
+func handleConfigSet(args []string) {
+	if len(args) < 1 {
+		fmt.Println("错误: 缺少参数")
+		fmt.Println("用法: deploy-cli config set <server|api-key|site> <value>")
+		os.Exit(1)
+	}
+
+	key := args[0]
+
+	// 加载当前配置
+	config, err := LoadConfig()
+	if err != nil {
+		// 如果配置文件不存在，创建新的
+		config = &ClientConfig{
+			ServerURL: "http://localhost:8080/api",
+			APIKey:    "",
+			SitePaths: make(map[string]string),
+		}
+	}
+
+	// 确保SitePaths初始化
+	if config.SitePaths == nil {
+		config.SitePaths = make(map[string]string)
+	}
+
+	switch key {
+	case "server":
+		if len(args) < 2 {
+			fmt.Println("错误: 请提供服务器地址")
+			fmt.Println("用法: deploy-cli config set server <url>")
+			os.Exit(1)
+		}
+		config.ServerURL = args[1]
+		fmt.Printf("✓ 服务器地址已设置为: %s\n", args[1])
+
+	case "api-key":
+		if len(args) < 2 {
+			fmt.Println("错误: 请提供API密钥")
+			fmt.Println("用法: deploy-cli config set api-key <key>")
+			os.Exit(1)
+		}
+		config.APIKey = args[1]
+		if args[1] == "" {
+			fmt.Println("✓ API密钥已清除（不使用密钥验证）")
+		} else {
+			fmt.Println("✓ API密钥已设置")
+		}
+
+	case "site":
+		if len(args) < 3 {
+			fmt.Println("错误: 请提供网站名称和目录路径")
+			fmt.Println("用法: deploy-cli config set site <name> <directory>")
+			os.Exit(1)
+		}
+		siteName := args[1]
+		sitePath := args[2]
+
+		// 检查目录是否存在
+		if _, err := os.Stat(sitePath); os.IsNotExist(err) {
+			fmt.Printf("警告: 目录不存在: %s\n", sitePath)
+			fmt.Print("是否仍然保存此路径？(y/N): ")
+			reader := bufio.NewReader(os.Stdin)
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+			if strings.ToLower(input) != "y" {
+				fmt.Println("取消操作")
+				return
+			}
+		}
+
+		// 转换为绝对路径
+		absPath, err := filepath.Abs(sitePath)
+		if err == nil {
+			sitePath = absPath
+		}
+
+		config.SitePaths[siteName] = sitePath
+		fmt.Printf("✓ 网站 '%s' 的发布目录已设置为: %s\n", siteName, sitePath)
+		fmt.Println("  现在可以使用 'deploy-cli deploy %s' 直接部署\n", siteName)
+
+	default:
+		fmt.Printf("错误: 未知的配置项 '%s'\n", key)
+		fmt.Println("支持的配置项: server, api-key, site")
+		os.Exit(1)
+	}
+
+	// 保存配置
+	if err := SaveConfig(config); err != nil {
+		fmt.Printf("错误: 保存配置失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// handleConfigRemove 移除配置项
+func handleConfigRemove(args []string) {
+	if len(args) < 1 {
+		fmt.Println("错误: 缺少参数")
+		fmt.Println("用法: deploy-cli config remove <site> <name>")
+		os.Exit(1)
+	}
+
+	key := args[0]
+
+	if key != "site" {
+		fmt.Printf("错误: 不支持的移除操作 '%s'\n", key)
+		fmt.Println("当前只支持 'remove site <name>'")
+		os.Exit(1)
+	}
+
+	if len(args) < 2 {
+		fmt.Println("错误: 请提供网站名称")
+		fmt.Println("用法: deploy-cli config remove site <name>")
+		os.Exit(1)
+	}
+
+	siteName := args[1]
+
+	// 加载当前配置
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("错误: 加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 检查网站是否在配置中
+	if _, exists := config.SitePaths[siteName]; !exists {
+		fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", siteName)
+		os.Exit(1)
+	}
+
+	// 删除配置
+	delete(config.SitePaths, siteName)
+	fmt.Printf("✓ 已移除网站 '%s' 的发布目录配置\n", siteName)
+
+	// 保存配置
+	if err := SaveConfig(config); err != nil {
+		fmt.Printf("错误: 保存配置失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// handleConfigGet 查看当前配置
+func handleConfigGet() {
+	config, err := LoadConfig()
+	if err != nil {
+		fmt.Printf("错误: 加载配置失败: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("\n当前配置:")
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("服务器地址: %s\n", config.ServerURL)
+
+	if config.APIKey == "" {
+		fmt.Println("API密钥:    （未设置）")
+	} else {
+		// 隐藏部分密钥用于显示
+		if len(config.APIKey) <= 8 {
+			fmt.Println("API密钥:    ********")
+		} else {
+			maskedKey := config.APIKey[:4] + "****" + config.APIKey[len(config.APIKey)-4:]
+			fmt.Printf("API密钥:    %s\n", maskedKey)
+		}
+	}
+
+	// 显示网站目录配置
+	if len(config.SitePaths) > 0 {
+		fmt.Println("\n网站发布目录:")
+		for name, path := range config.SitePaths {
+			fmt.Printf("  %-20s -> %s\n", name, path)
+		}
+	} else {
+		fmt.Println("\n网站发布目录: (未配置)")
+	}
+
+	fmt.Println(strings.Repeat("-", 60))
+	fmt.Printf("\n配置文件位置: %s\n", getConfigPath())
+	fmt.Println("\n提示:")
+	fmt.Println("  使用 'deploy-cli config set site <name> <dir>' 配置网站目录")
+	fmt.Println("  使用 'deploy-cli config remove site <name>' 移除网站目录")
+	fmt.Println("  使用 'deploy-cli deploy <name>' 直接部署已配置的网站")
 }

@@ -11,7 +11,14 @@
       "Bash(wails version:*)",
       "Bash(./build-gui.sh:*)",
       "Bash(./build-cli.sh:*)",
-      "Bash(./bin/deploy-cli help:*)"
+      "Bash(./bin/deploy-cli help:*)",
+      "Bash(F:/work/aideploy/bin/deploy-cli.exe deploy:*)",
+      "Bash(curl:*)",
+      "Bash(tar:*)",
+      "Bash(F:/work/aideploy/bin/deploy-cli.exe deploy-full:*)",
+      "Bash(./deploy-cli.exe deploy-full:*)",
+      "Bash(./deploy-cli.exe create:*)",
+      "Bash(./test-cli.exe:*)"
     ]
   }
 }

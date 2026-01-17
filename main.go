@@ -50,6 +50,7 @@ type Config struct {
 	SingleDomain     string `json:"single_domain"`
 	Port             int    `json:"port"`
 	EnableVersioning bool   `json:"enable_versioning"`
+	APIKey           string `json:"api_key"`
 }
 
 // loadConfig 加载配置文件
@@ -71,6 +72,7 @@ func loadConfig(path string) (server.Config, error) {
 		SingleDomain:     cfg.SingleDomain,
 		Port:             cfg.Port,
 		EnableVersioning: cfg.EnableVersioning,
+		APIKey:           cfg.APIKey,
 	}, nil
 }
 
@@ -91,6 +93,7 @@ func createDefaultConfig(path string) error {
 		SingleDomain:     "",
 		Port:             8080,
 		EnableVersioning: true,
+		APIKey:           "", // 留空则不验证API密钥
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

@@ -87,9 +87,15 @@ go run server/main.go -init
   "mode": "subdomain",               // 部署模式: subdomain 或 path
   "single_domain": "",               // 单域名模式下的域名
   "port": 8080,                      // 服务端口（HTTP）
-  "enable_versioning": true          // 是否启用版本控制
+  "enable_versioning": true,         // 是否启用版本控制
+  "api_key": "your-secret-key"       // API密钥（可选，留空则不验证）
 }
 ```
+
+**API 密钥说明**：
+- `api_key` 为可选字段，留空则不进行密钥验证
+- 如果设置了 `api_key`，客户端必须在请求头中提供相同的密钥
+- 建议在生产环境设置强密钥以保护服务端安全
 
 #### 启动服务
 
@@ -118,6 +124,66 @@ deploy-server.exe
 ### 2. 客户端使用
 
 项目提供两种客户端：**CLI 命令行工具** 和 **GUI 图形界面工具**
+
+#### 客户端配置
+
+在客户端首次使用前，建议先配置服务端地址。
+
+**配置文件位置**: `~/.aideploy/config.json`
+
+**创建配置文件**:
+
+```bash
+# 创建配置目录
+mkdir ~/.aideploy
+
+# 创建配置文件（根据你的实际情况修改 server_url）
+cat > ~/.aideploy/config.json << EOF
+{
+  "server_url": "http://your-server-ip:8080/api"
+}
+EOF
+```
+
+**Windows 用户**:
+
+```cmd
+# 创建配置目录
+mkdir %USERPROFILE%\.aideploy
+
+# 创建配置文件（使用记事本或编辑器）
+notepad %USERPROFILE%\.aideploy\config.json
+```
+
+配置文件内容：
+
+```json
+{
+  "server_url": "http://your-server-ip:8080/api",
+  "api_key": "your-secret-key"
+}
+```
+
+**注意**:
+- 如果不创建配置文件，客户端将使用默认地址：`http://localhost:8080/api`
+- `server_url` 必须包含 `/api` 路径
+- `api_key` 需要与服务端配置的密钥一致（如果服务端设置了密钥）
+- 支持 HTTP 和 HTTPS 协议
+
+**使用命令行配置（推荐）**：
+
+除了手动编辑配置文件，你也可以使用 `config` 命令来设置配置：
+
+```bash
+# 设置服务器地址
+deploy-cli config set server http://192.168.1.100:8080/api
+
+# 设置API密钥
+deploy-cli config set api-key your-secret-key
+
+# 查看当前配置
+deploy-cli config get
+```
 
 #### 方式一：CLI 命令行工具
 

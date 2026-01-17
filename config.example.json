@@ -4,5 +4,6 @@
   "mode": "subdomain",
   "single_domain": "",
   "port": 8080,
-  "enable_versioning": true
+  "enable_versioning": true,
+  "api_key": ""
 }
