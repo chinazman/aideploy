@@ -42,9 +42,10 @@ WORKDIR /app
 # 从构建阶段复制可执行文件
 COPY --from=builder /build/deploy-server .
 
-# 创建配置文件目录
+# 创建配置文件目录和默认配置
 RUN mkdir -p /app/config && \
     mkdir -p /app/websites && \
+    echo '{"base_domain":"localhost","web_root":"/app/websites","mode":"subdomain","single_domain":"localhost","port":80,"enable_versioning":true,"api_key":""}' > /app/config/config.json && \
     chown -R appuser:appuser /app
 
 # 切换到非 root 用户
@@ -53,12 +54,9 @@ USER appuser
 # 暴露端口
 EXPOSE 80
 
-# 设置环境变量
-ENV CONFIG_PATH=/app/config/config.json
-
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/api/sites/list || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost/api/sites/list || exit 1
 
 # 启动应用
 CMD ["./deploy-server", "-config", "config/config.json"]
