@@ -139,8 +139,21 @@ func (h *StaticFileHandler) extractSiteName(host string) (string, error) {
 		parts := strings.Split(host, ".")
 		if len(parts) >= 2 {
 			// 检查是否匹配基础域名
-			domain := strings.Join(parts[len(parts)-2:], ".")
-			if domain == h.baseDomain && len(parts) > 2 {
+			// 例如: jydemo.localhost，基础域名是 localhost
+			// parts[len(parts)-1] 是最后一部分（顶级域名）
+			// 对于 localhost 这种单层域名，检查最后一部分
+			// 对于 example.com 这种多层域名，检查最后两部分
+
+			var actualDomain string
+			if len(parts) >= 3 {
+				// 多层域名: site.example.com
+				actualDomain = strings.Join(parts[len(parts)-2:], ".")
+			} else {
+				// 单层域名: site.localhost
+				actualDomain = parts[len(parts)-1]
+			}
+
+			if actualDomain == h.baseDomain {
 				return parts[0], nil
 			}
 		}
