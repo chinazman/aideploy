@@ -35,7 +35,6 @@ archives:
     files:
       - README.md
       - DOCKER.md
-      - bin/config.json
       - docker-compose.yml
 
 checksum:
@@ -78,8 +77,6 @@ dockers:
       - --label=org.opencontainers.image.created={{ .Date }}
       - --label=org.opencontainers.image.revision={{ .Commit }}
       - --label=org.opencontainers.image.source={{ .GitURL }}
-    extra_files:
-      - bin/config.json
 
 release:
   draft: false
