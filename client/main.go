@@ -106,9 +106,9 @@ func printUsage() {
 	fmt.Println("  config                管理配置（服务器地址、API密钥、网站目录）")
 	fmt.Println("  create <name>          创建新网站")
 	fmt.Println("  delete <name>          删除网站")
-	fmt.Println("  deploy <name> [dir]    部署网站（智能选择增量或全量）")
-	fmt.Println("  deploy-full <name>     全量部署网站")
-	fmt.Println("  deploy-inc <name>      增量部署网站")
+	fmt.Println("  deploy [name] [dir]    部署网站（智能选择增量或全量，自动匹配网站）")
+	fmt.Println("  deploy-full [name]     全量部署网站")
+	fmt.Println("  deploy-inc [name]      增量部署网站")
 	fmt.Println("  list                   列出所有网站")
 	fmt.Println("  versions <name>        查看网站版本历史")
 	fmt.Println("  rollback <name> <hash> 回滚到指定版本")
@@ -119,8 +119,9 @@ func printUsage() {
 	fmt.Println("  deploy-cli config set site my-prototype ./dist")
 	fmt.Println("  deploy-cli config get")
 	fmt.Println("  deploy-cli create my-prototype")
-	fmt.Println("  deploy-cli deploy my-prototype")
-	fmt.Println("  deploy-cli deploy my-prototype ./dist")
+	fmt.Println("  deploy-cli deploy                    # 自动匹配并部署")
+	fmt.Println("  deploy-cli deploy my-prototype        # 指定网站部署")
+	fmt.Println("  deploy-cli deploy my-prototype ./dist # 指定目录部署")
 	fmt.Println("  deploy-cli versions my-prototype")
 	fmt.Println("  deploy-cli rollback my-prototype abc123")
 }
@@ -360,33 +361,53 @@ func handleRollback(apiBaseURL, apiKey string, args []string) {
 
 // handleDeploy 智能部署（自动选择增量或全量）
 func handleDeploy(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
-	if len(args) < 1 {
-		fmt.Println("错误: 请提供网站名称")
-		fmt.Println("用法: deploy-cli deploy <name> [directory]")
-		os.Exit(1)
-	}
-
-	name := args[0]
-	var dirPath string
+	var name, dirPath string
 	message := "更新部署"
 
-	// 确定目录路径
-	if len(args) >= 2 {
-		// 命令行指定了目录
-		dirPath = args[1]
-		if len(args) > 2 {
-			message = strings.Join(args[2:], " ")
-		}
-	} else {
-		// 从配置读取目录
-		var ok bool
-		dirPath, ok = config.SitePaths[name]
-		if !ok || dirPath == "" {
-			fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
-			fmt.Println("\n请先配置网站目录，或者直接指定目录：")
-			fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
-			fmt.Printf("  deploy-cli deploy %s ./dist\n", name)
+	// 如果没有提供网站名称，尝试根据当前目录自动匹配
+	if len(args) < 1 {
+		matchedSites := findMatchingSites(config)
+		if len(matchedSites) == 0 {
+			fmt.Println("错误: 无法确定要部署的网站")
+			fmt.Println("\n请指定网站名称：")
+			fmt.Println("  deploy-cli deploy <site-name>")
+			fmt.Println("\n或者先配置网站目录：")
+			fmt.Println("  deploy-cli config set site <site-name> <directory>")
 			os.Exit(1)
+		} else if len(matchedSites) > 1 {
+			fmt.Println("错误: 当前目录匹配到多个网站，请明确指定：")
+			for _, site := range matchedSites {
+				fmt.Printf("  - %s (%s)\n", site, config.SitePaths[site])
+			}
+			fmt.Println("\n使用方法: deploy-cli deploy <site-name>")
+			os.Exit(1)
+		}
+
+		// 唯一匹配
+		name = matchedSites[0]
+		dirPath = config.SitePaths[name]
+		fmt.Printf("自动匹配到网站: %s\n", name)
+	} else {
+		name = args[0]
+
+		// 确定目录路径
+		if len(args) >= 2 {
+			// 命令行指定了目录
+			dirPath = args[1]
+			if len(args) > 2 {
+				message = strings.Join(args[2:], " ")
+			}
+		} else {
+			// 从配置读取目录
+			var ok bool
+			dirPath, ok = config.SitePaths[name]
+			if !ok || dirPath == "" {
+				fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+				fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+				fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+				fmt.Printf("  deploy-cli deploy %s ./dist\n", name)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -406,33 +427,96 @@ func handleDeploy(apiBaseURL, apiKey string, config *ClientConfig, args []string
 	}
 }
 
-// handleDeployFull 全量部署
-func handleDeployFull(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
-	if len(args) < 1 {
-		fmt.Println("错误: 请提供网站名称")
-		fmt.Println("用法: deploy-cli deploy-full <name> [directory]")
-		os.Exit(1)
+// findMatchingSites 根据当前目录查找匹配的网站
+// 匹配规则：
+// 1. 优先匹配：当前目录是网站路径的子路径
+// 2. 次优匹配：网站路径是当前目录的子路径
+func findMatchingSites(config *ClientConfig) []string {
+	// 获取当前工作目录
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return nil
 	}
 
-	name := args[0]
-	var dirPath string
+	// 转换为绝对路径（处理相对路径情况）
+	absCurrentDir, err := filepath.Abs(currentDir)
+	if err != nil {
+		return nil
+	}
+
+	var primaryMatches []string // 当前目录是网站路径的子路径
+	var secondaryMatches []string // 网站路径是当前目录的子路径
+
+	for siteName, sitePath := range config.SitePaths {
+		// 转换网站路径为绝对路径
+		absSitePath, err := filepath.Abs(sitePath)
+		if err != nil {
+			continue
+		}
+
+		// 检查当前目录是否是网站路径的子路径（优先匹配）
+		if strings.HasPrefix(absCurrentDir, absSitePath) {
+			primaryMatches = append(primaryMatches, siteName)
+		} else if strings.HasPrefix(absSitePath, absCurrentDir) {
+			// 检查网站路径是否是当前目录的子路径（次优匹配）
+			secondaryMatches = append(secondaryMatches, siteName)
+		}
+	}
+
+	// 优先返回主匹配，如果没有则返回次匹配
+	if len(primaryMatches) > 0 {
+		return primaryMatches
+	}
+	return secondaryMatches
+}
+
+// handleDeployFull 全量部署
+func handleDeployFull(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+	var name, dirPath string
 	message := "全量部署"
 
-	// 确定目录路径
-	if len(args) >= 2 {
-		dirPath = args[1]
-		if len(args) > 2 {
-			message = strings.Join(args[2:], " ")
-		}
-	} else {
-		var ok bool
-		dirPath, ok = config.SitePaths[name]
-		if !ok || dirPath == "" {
-			fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
-			fmt.Println("\n请先配置网站目录，或者直接指定目录：")
-			fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
-			fmt.Printf("  deploy-cli deploy-full %s ./dist\n", name)
+	// 如果没有提供网站名称，尝试根据当前目录自动匹配
+	if len(args) < 1 {
+		matchedSites := findMatchingSites(config)
+		if len(matchedSites) == 0 {
+			fmt.Println("错误: 无法确定要部署的网站")
+			fmt.Println("\n请指定网站名称：")
+			fmt.Println("  deploy-cli deploy-full <site-name>")
+			fmt.Println("\n或者先配置网站目录：")
+			fmt.Println("  deploy-cli config set site <site-name> <directory>")
 			os.Exit(1)
+		} else if len(matchedSites) > 1 {
+			fmt.Println("错误: 当前目录匹配到多个网站，请明确指定：")
+			for _, site := range matchedSites {
+				fmt.Printf("  - %s (%s)\n", site, config.SitePaths[site])
+			}
+			fmt.Println("\n使用方法: deploy-cli deploy-full <site-name>")
+			os.Exit(1)
+		}
+
+		// 唯一匹配
+		name = matchedSites[0]
+		dirPath = config.SitePaths[name]
+		fmt.Printf("自动匹配到网站: %s\n", name)
+	} else {
+		name = args[0]
+
+		// 确定目录路径
+		if len(args) >= 2 {
+			dirPath = args[1]
+			if len(args) > 2 {
+				message = strings.Join(args[2:], " ")
+			}
+		} else {
+			var ok bool
+			dirPath, ok = config.SitePaths[name]
+			if !ok || dirPath == "" {
+				fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+				fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+				fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+				fmt.Printf("  deploy-cli deploy-full %s ./dist\n", name)
+				os.Exit(1)
+			}
 		}
 	}
 
@@ -454,31 +538,51 @@ func handleDeployFull(apiBaseURL, apiKey string, config *ClientConfig, args []st
 
 // handleDeployIncremental 增量部署
 func handleDeployIncremental(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
-	if len(args) < 1 {
-		fmt.Println("错误: 请提供网站名称")
-		fmt.Println("用法: deploy-cli deploy-inc <name> [directory]")
-		os.Exit(1)
-	}
-
-	name := args[0]
-	var dirPath string
+	var name, dirPath string
 	message := "增量部署"
 
-	// 确定目录路径
-	if len(args) >= 2 {
-		dirPath = args[1]
-		if len(args) > 2 {
-			message = strings.Join(args[2:], " ")
-		}
-	} else {
-		var ok bool
-		dirPath, ok = config.SitePaths[name]
-		if !ok || dirPath == "" {
-			fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
-			fmt.Println("\n请先配置网站目录，或者直接指定目录：")
-			fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
-			fmt.Printf("  deploy-cli deploy-inc %s ./dist\n", name)
+	// 如果没有提供网站名称，尝试根据当前目录自动匹配
+	if len(args) < 1 {
+		matchedSites := findMatchingSites(config)
+		if len(matchedSites) == 0 {
+			fmt.Println("错误: 无法确定要部署的网站")
+			fmt.Println("\n请指定网站名称：")
+			fmt.Println("  deploy-cli deploy-inc <site-name>")
+			fmt.Println("\n或者先配置网站目录：")
+			fmt.Println("  deploy-cli config set site <site-name> <directory>")
 			os.Exit(1)
+		} else if len(matchedSites) > 1 {
+			fmt.Println("错误: 当前目录匹配到多个网站，请明确指定：")
+			for _, site := range matchedSites {
+				fmt.Printf("  - %s (%s)\n", site, config.SitePaths[site])
+			}
+			fmt.Println("\n使用方法: deploy-cli deploy-inc <site-name>")
+			os.Exit(1)
+		}
+
+		// 唯一匹配
+		name = matchedSites[0]
+		dirPath = config.SitePaths[name]
+		fmt.Printf("自动匹配到网站: %s\n", name)
+	} else {
+		name = args[0]
+
+		// 确定目录路径
+		if len(args) >= 2 {
+			dirPath = args[1]
+			if len(args) > 2 {
+				message = strings.Join(args[2:], " ")
+			}
+		} else {
+			var ok bool
+			dirPath, ok = config.SitePaths[name]
+			if !ok || dirPath == "" {
+				fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+				fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+				fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+				fmt.Printf("  deploy-cli deploy-inc %s ./dist\n", name)
+				os.Exit(1)
+			}
 		}
 	}
 

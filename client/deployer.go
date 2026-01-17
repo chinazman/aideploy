@@ -64,6 +64,12 @@ func NewDeployer(serverURL, siteName string) *Deployer {
 func (d *Deployer) DeployFull(sitePath, message string) error {
 	fmt.Println("开始全量部署...")
 
+	// 扫描当前文件状态（用于更新跟踪信息）
+	currentFiles, err := d.scanFiles(sitePath)
+	if err != nil {
+		return fmt.Errorf("扫描文件失败: %v", err)
+	}
+
 	// 创建临时打包文件
 	tempFile, err := os.CreateTemp("", "deploy-full-*.tar.gz")
 	if err != nil {
@@ -90,8 +96,8 @@ func (d *Deployer) DeployFull(sitePath, message string) error {
 		return fmt.Errorf("上传失败: %v", err)
 	}
 
-	// 更新跟踪信息
-	if err := d.updateTracking(sitePath, nil); err != nil {
+	// 更新跟踪信息（保存所有文件状态）
+	if err := d.updateTracking(sitePath, currentFiles); err != nil {
 		fmt.Printf("警告: 更新跟踪信息失败: %v\n", err)
 	}
 
