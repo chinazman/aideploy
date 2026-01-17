@@ -76,19 +76,14 @@ docker pull 你的dockerhub用户名/aideploy:v1.0.0
 
 # 拉取最新版本
 docker pull 你的dockerhub用户名/aideploy:latest
-
-# 拉取 ARM64 版本
-docker pull 你的dockerhub用户名/aideploy:latest-arm64
 ```
 
 ### 二进制文件
 
 在 Release 页面下载：
 - `deploy-server_Linux_x86_64.tar.gz` - Linux AMD64
-- `deploy-server_Linux_arm64.tar.gz` - Linux ARM64
 - `deploy-server_Windows_x86_64.zip` - Windows 64位
 - `deploy-server_Darwin_x86_64.tar.gz` - macOS Intel
-- `deploy-server_Darwin_arm64.tar.gz` - macOS Apple Silicon
 
 ## 🔐 权限配置
 

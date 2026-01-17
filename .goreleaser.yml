@@ -15,17 +15,6 @@ builds:
       - darwin
     goarch:
       - amd64
-      - arm64
-      - arm
-    goarm:
-      - '7'
-    ignore:
-      - goos: darwin
-        goarch: arm
-      - goos: windows
-        goarch: arm
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
     main: main.go
@@ -84,28 +73,12 @@ dockers:
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
-      - --platform=linux/amd64
       - --label=org.opencontainers.image.title={{ .ProjectName }}
       - --label=org.opencontainers.image.description={{ .ProjectName }} Docker Image
       - --label=org.opencontainers.image.version={{ .Version }}
       - --label=org.opencontainers.image.created={{ .Date }}
       - --label=org.opencontainers.image.revision={{ .Commit }}
       - --label=org.opencontainers.image.source={{ .GitURL }}
-    extra_files:
-      - bin/config.json
-
-  - image_templates:
-      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:{{ .Version }}-arm64'
-      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:latest-arm64'
-    goos: linux
-    goarch: arm64
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - --platform=linux/arm64
-      - --label=org.opencontainers.image.title={{ .ProjectName }}
-      - --label=org.opencontainers.image.description={{ .ProjectName }} ARM64 Docker Image
-      - --label=org.opencontainers.image.version={{ .Version }}
     extra_files:
       - bin/config.json
 
