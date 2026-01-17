@@ -75,6 +75,14 @@
                 >
                   📁 绑定目录
                 </button>
+                <button
+                  v-if="config.site_paths && config.site_paths[site]"
+                  @click="pullFromServer(site)"
+                  class="action-btn info"
+                  title="从服务器覆盖本地"
+                >
+                  ⬇️ 下载
+                </button>
                 <button @click="showVersions(site)" class="action-btn" title="版本历史">📜</button>
                 <button
                   v-if="siteListTab === 'bound'"
@@ -188,12 +196,45 @@
             />
           </div>
           <div class="info-box">
-            <p>将使用绑定的目录进行部署:</p>
+            <p>部署目录:</p>
             <p class="info-path">{{ config.site_paths && config.site_paths[currentDeploySite] }}</p>
           </div>
+
+          <!-- 变更信息 -->
+          <div v-if="checkingChanges" class="info-box">
+            <p>正在检查文件变更...</p>
+          </div>
+          <div v-else-if="changesResult" class="info-box">
+            <p>变更信息: <strong>{{ changesResult.summary }}</strong></p>
+            <div v-if="changesResult.changes.length > 0" class="changes-list">
+              <div
+                v-for="(change, index) in displayChanges"
+                :key="index"
+                class="change-item"
+                :class="'change-' + change.type"
+              >
+                <span class="change-icon">{{ getChangeIcon(change.type) }}</span>
+                <span class="change-path">{{ change.path }}</span>
+                <span v-if="change.type !== 'deleted'" class="change-size">{{ formatSize(change.size) }}</span>
+              </div>
+              <div v-if="changesResult.changes.length > 10" class="changes-more">
+                还有 {{ changesResult.changes.length - 10 }} 个文件...
+              </div>
+            </div>
+            <div v-else class="no-changes">
+              <p>没有文件变更</p>
+            </div>
+          </div>
+
           <div class="modal-actions">
             <button @click="closeDeployModal" class="secondary-btn">取消</button>
-            <button @click="executeDeploy" class="success-btn">发布</button>
+            <button
+              @click="executeDeploy"
+              :disabled="changesResult && !changesResult.has_changes"
+              class="success-btn"
+            >
+              发布
+            </button>
           </div>
         </div>
       </div>
@@ -256,6 +297,8 @@ export default {
       showCreateSiteModal: false,
       showDeployModalFlag: false,
       showConfigModal: false,
+      checkingChanges: false,
+      changesResult: null,
       message: '',
       messageType: 'info',
       siteListTab: 'bound',
@@ -274,6 +317,11 @@ export default {
         )
       }
       return this.sites
+    },
+    displayChanges() {
+      if (!this.changesResult) return []
+      // 最多显示10个变更
+      return this.changesResult.changes.slice(0, 10)
     }
   },
   mounted() {
@@ -381,13 +429,29 @@ export default {
     showDeployModal(site) {
       this.currentDeploySite = site
       this.deployMessage = ''
+      this.changesResult = null
       this.showDeployModalFlag = true
+      this.checkChanges()
+    },
+
+    async checkChanges() {
+      this.checkingChanges = true
+      try {
+        const result = await window.go.main.App.CheckChanges(this.currentDeploySite)
+        this.changesResult = result
+      } catch (error) {
+        console.error('检查变更失败:', error)
+        this.changesResult = null
+      } finally {
+        this.checkingChanges = false
+      }
     },
 
     closeDeployModal() {
       this.showDeployModalFlag = false
       this.currentDeploySite = ''
       this.deployMessage = ''
+      this.changesResult = null
     },
 
     async executeDeploy() {
@@ -446,6 +510,20 @@ export default {
       }
     },
 
+    async pullFromServer(site) {
+      const dirPath = this.config.site_paths[site]
+      if (!confirm(`确定要从服务器下载网站 "${site}" 并覆盖本地目录 "${dirPath}" 吗？\n\n此操作将清空本地目录并从服务器下载最新文件。`)) {
+        return
+      }
+
+      try {
+        await window.go.main.App.PullSite(site)
+        this.showMessage('从服务器下载成功', 'success')
+      } catch (error) {
+        this.showMessage('下载失败: ' + error, 'error')
+      }
+    },
+
     async showVersions(site) {
       this.currentVersionsSite = site
       try {
@@ -483,6 +561,23 @@ export default {
     formatDate(dateStr) {
       const date = new Date(dateStr)
       return date.toLocaleString('zh-CN')
+    },
+
+    getChangeIcon(type) {
+      const icons = {
+        'added': '✨',
+        'modified': '📝',
+        'deleted': '🗑️'
+      }
+      return icons[type] || '📄'
+    },
+
+    formatSize(bytes) {
+      if (bytes === 0) return '0 B'
+      const k = 1024
+      const sizes = ['B', 'KB', 'MB', 'GB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
     },
 
     showMessage(msg, type = 'info') {
@@ -720,6 +815,15 @@ button:disabled {
   background: #0b5c0b;
 }
 
+.action-btn.info {
+  background: #0078d4;
+  color: white;
+}
+
+.action-btn.info:hover {
+  background: #005a9e;
+}
+
 /* 列表样式 */
 .tile-list {
   background: white;
@@ -938,6 +1042,76 @@ button:disabled {
   color: #0078d7;
   font-weight: 500;
   word-break: break-all;
+}
+
+/* Changes list */
+.changes-list {
+  margin-top: 10px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: white;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.change-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  gap: 8px;
+  font-size: 13px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.change-item:last-child {
+  border-bottom: none;
+}
+
+.change-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.change-path {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #333;
+}
+
+.change-size {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.change-added {
+  background: #e6fffa;
+}
+
+.change-modified {
+  background: #fffaf0;
+}
+
+.change-deleted {
+  background: #fff5f5;
+  opacity: 0.7;
+}
+
+.changes-more {
+  padding: 8px;
+  text-align: center;
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}
+
+.no-changes {
+  text-align: center;
+  padding: 20px;
+  color: #999;
+  font-size: 14px;
 }
 
 .versions-list {

@@ -6,13 +6,13 @@ all: server client
 # 编译服务端
 server:
 	@echo "编译服务端..."
-	@cd server && go build -o ../bin/deploy-server main.go
+	@go build -ldflags="-s -w" -o bin/deploy-server main.go
 	@echo "✓ 服务端编译完成"
 
 # 编译客户端
 client:
 	@echo "编译CLI客户端..."
-	@cd client && go build -o ../bin/deploy-cli main.go
+	@cd client && go build -tags cli -ldflags="-s -w" -o ../bin/deploy-cli main.go deployer.go
 	@echo "✓ CLI客户端编译完成"
 
 # 编译GUI应用（需要Wails）

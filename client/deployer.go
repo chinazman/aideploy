@@ -65,7 +65,7 @@ func (d *Deployer) DeployFull(sitePath, message string) error {
 	fmt.Println("开始全量部署...")
 
 	// 扫描当前文件状态（用于更新跟踪信息）
-	currentFiles, err := d.scanFiles(sitePath)
+	currentFiles, err := d.ScanFiles(sitePath)
 	if err != nil {
 		return fmt.Errorf("扫描文件失败: %v", err)
 	}
@@ -97,7 +97,7 @@ func (d *Deployer) DeployFull(sitePath, message string) error {
 	}
 
 	// 更新跟踪信息（保存所有文件状态）
-	if err := d.updateTracking(sitePath, currentFiles); err != nil {
+	if err := d.UpdateTracking(sitePath, currentFiles); err != nil {
 		fmt.Printf("警告: 更新跟踪信息失败: %v\n", err)
 	}
 
@@ -110,13 +110,13 @@ func (d *Deployer) DeployIncremental(sitePath, message string) error {
 	fmt.Println("开始增量部署...")
 
 	// 获取当前文件状态
-	currentFiles, err := d.scanFiles(sitePath)
+	currentFiles, err := d.ScanFiles(sitePath)
 	if err != nil {
 		return fmt.Errorf("扫描文件失败: %v", err)
 	}
 
 	// 加载之前的跟踪信息
-	trackingData, err := d.loadTracking()
+	trackingData, err := d.LoadTracking()
 	if err != nil {
 		// 如果没有跟踪信息，回退到全量部署
 		fmt.Println("未找到跟踪信息，执行全量部署...")
@@ -124,8 +124,8 @@ func (d *Deployer) DeployIncremental(sitePath, message string) error {
 	}
 
 	// 找出变更的文件
-	changedFiles := d.findChangedFiles(currentFiles, trackingData.Files)
-	deletedFiles := d.findDeletedFiles(currentFiles, trackingData.Files)
+	changedFiles := d.FindChangedFiles(currentFiles, trackingData.Files)
+	deletedFiles := d.FindDeletedFiles(currentFiles, trackingData.Files)
 
 	if len(changedFiles) == 0 && len(deletedFiles) == 0 {
 		fmt.Println("没有文件变更，无需部署")
@@ -155,7 +155,7 @@ func (d *Deployer) DeployIncremental(sitePath, message string) error {
 	}
 
 	// 更新跟踪信息
-	if err := d.updateTracking(sitePath, currentFiles); err != nil {
+	if err := d.UpdateTracking(sitePath, currentFiles); err != nil {
 		fmt.Printf("警告: 更新跟踪信息失败: %v\n", err)
 	}
 
@@ -166,7 +166,7 @@ func (d *Deployer) DeployIncremental(sitePath, message string) error {
 // Deploy 智能部署(自动选择增量或全量)
 func (d *Deployer) Deploy(sitePath, message string) error {
 	// 检查是否有跟踪信息
-	_, err := d.loadTracking()
+	_, err := d.LoadTracking()
 	if err != nil {
 		// 没有跟踪信息，使用全量部署
 		return d.DeployFull(sitePath, message)
@@ -176,8 +176,8 @@ func (d *Deployer) Deploy(sitePath, message string) error {
 	return d.DeployIncremental(sitePath, message)
 }
 
-// scanFiles 扫描目录中的所有文件
-func (d *Deployer) scanFiles(sitePath string) ([]FileStatus, error) {
+// ScanFiles 扫描目录中的所有文件
+func (d *Deployer) ScanFiles(sitePath string) ([]FileStatus, error) {
 	var files []FileStatus
 
 	err := filepath.Walk(sitePath, func(path string, info os.FileInfo, err error) error {
@@ -239,8 +239,8 @@ func (d *Deployer) calculateHash(filePath string) (string, error) {
 	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
-// findChangedFiles 找出变更的文件
-func (d *Deployer) findChangedFiles(current []FileStatus, previous []FileStatus) []FileStatus {
+// FindChangedFiles 找出变更的文件
+func (d *Deployer) FindChangedFiles(current []FileStatus, previous []FileStatus) []FileStatus {
 	prevMap := make(map[string]FileStatus)
 	for _, f := range previous {
 		prevMap[f.Path] = f
@@ -257,8 +257,8 @@ func (d *Deployer) findChangedFiles(current []FileStatus, previous []FileStatus)
 	return changed
 }
 
-// findDeletedFiles 找出删除的文件
-func (d *Deployer) findDeletedFiles(current []FileStatus, previous []FileStatus) []string {
+// FindDeletedFiles 找出删除的文件
+func (d *Deployer) FindDeletedFiles(current []FileStatus, previous []FileStatus) []string {
 	currMap := make(map[string]bool)
 	for _, f := range current {
 		currMap[f.Path] = true
@@ -455,8 +455,8 @@ func (d *Deployer) uploadPackage(url, packagePath, message string) error {
 	return nil
 }
 
-// loadTracking 加载跟踪信息
-func (d *Deployer) loadTracking() (*TrackingData, error) {
+// LoadTracking 加载跟踪信息
+func (d *Deployer) LoadTracking() (*TrackingData, error) {
 	trackingPath := d.getTrackingPath()
 	data, err := os.ReadFile(trackingPath)
 	if err != nil {
@@ -471,8 +471,13 @@ func (d *Deployer) loadTracking() (*TrackingData, error) {
 	return &tracking, nil
 }
 
-// updateTracking 更新跟踪信息
-func (d *Deployer) updateTracking(sitePath string, files []FileStatus) error {
+// getTrackingPath 获取跟踪文件路径
+func (d *Deployer) getTrackingPath() string {
+	return filepath.Join(d.trackingDir, d.siteName+".json")
+}
+
+// UpdateTracking 更新跟踪信息
+func (d *Deployer) UpdateTracking(sitePath string, files []FileStatus) error {
 	// 确保跟踪目录存在
 	if err := os.MkdirAll(d.trackingDir, 0755); err != nil {
 		return err
@@ -493,7 +498,146 @@ func (d *Deployer) updateTracking(sitePath string, files []FileStatus) error {
 	return os.WriteFile(trackingPath, data, 0644)
 }
 
-// getTrackingPath 获取跟踪文件路径
-func (d *Deployer) getTrackingPath() string {
-	return filepath.Join(d.trackingDir, d.siteName+".json")
+// PullFromServer 从服务器下载并覆盖本地目录
+func (d *Deployer) PullFromServer(sitePath string) error {
+	fmt.Println("开始从服务器下载文件...")
+
+	// 检查本地目录是否存在
+	dirExists := true
+	if _, err := os.Stat(sitePath); os.IsNotExist(err) {
+		dirExists = false
+		// 创建目录
+		if err := os.MkdirAll(sitePath, 0755); err != nil {
+			return fmt.Errorf("创建目录失败: %v", err)
+		}
+	}
+
+	// 请求服务器导出文件
+	url := fmt.Sprintf("%s/sites/export?name=%s", d.serverURL, d.siteName)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("创建请求失败: %v", err)
+	}
+
+	// 添加API密钥
+	if d.apiKey != "" {
+		req.Header.Set("X-API-Key", d.apiKey)
+	}
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("下载失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 检查响应状态
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("服务器返回错误: %s", string(body))
+	}
+
+	// 如果目录已存在，先清空（保留隐藏文件）
+	if dirExists {
+		fmt.Println("清空本地目录...")
+		entries, _ := os.ReadDir(sitePath)
+		for _, entry := range entries {
+			// 跳过隐藏文件和目录
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			// 删除文件或目录
+			os.RemoveAll(filepath.Join(sitePath, entry.Name()))
+		}
+	}
+
+	// 解压下载的文件
+	fmt.Println("解压文件到本地...")
+	if err := d.extractPackage(resp.Body, sitePath); err != nil {
+		return fmt.Errorf("解压失败: %v", err)
+	}
+
+	// 扫描下载的文件并更新跟踪信息
+	currentFiles, err := d.ScanFiles(sitePath)
+	if err != nil {
+		fmt.Printf("警告: 扫描文件失败: %v\n", err)
+	} else {
+		if err := d.UpdateTracking(sitePath, currentFiles); err != nil {
+			fmt.Printf("警告: 更新跟踪信息失败: %v\n", err)
+		}
+	}
+
+	fmt.Println("✓ 从服务器下载成功!")
+	return nil
+}
+
+// extractPackage 解压部署包到指定目录
+func (d *Deployer) extractPackage(packageFile io.Reader, destPath string) error {
+	// 创建gzip reader
+	gzReader, err := gzip.NewReader(packageFile)
+	if err != nil {
+		return fmt.Errorf("创建gzip reader失败: %v", err)
+	}
+	defer gzReader.Close()
+
+	// 创建tar reader
+	tarReader := tar.NewReader(gzReader)
+
+	fileCount := 0
+	dirCount := 0
+
+	// 遍历tar文件
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("读取tar条目失败: %v", err)
+		}
+
+		// 构建目标路径
+		targetPath := filepath.Join(destPath, header.Name)
+
+		// 检查路径安全
+		if !strings.HasPrefix(targetPath, destPath) {
+			return fmt.Errorf("非法路径: %s", header.Name)
+		}
+
+		// 根据文件类型处理
+		switch header.Typeflag {
+		case tar.TypeDir:
+			// 创建目录
+			if err := os.MkdirAll(targetPath, 0755); err != nil {
+				return fmt.Errorf("创建目录失败: %v", err)
+			}
+			dirCount++
+
+		case tar.TypeReg:
+			// 创建文件
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("创建父目录失败: %v", err)
+			}
+
+			outFile, err := os.Create(targetPath)
+			if err != nil {
+				return fmt.Errorf("创建文件失败: %v", err)
+			}
+
+			if _, err := io.Copy(outFile, tarReader); err != nil {
+				outFile.Close()
+				return fmt.Errorf("写入文件失败: %v", err)
+			}
+			outFile.Close()
+			fileCount++
+
+		case tar.TypeSymlink:
+			// 忽略符号链接
+			continue
+		}
+	}
+
+	fmt.Printf("已解压: %d 个文件, %d 个目录\n", fileCount, dirCount)
+	return nil
 }

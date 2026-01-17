@@ -367,3 +367,158 @@ func (a *App) SelectDirectory() (string, error) {
 
 	return selection, nil
 }
+
+// FileChange 文件变更信息
+type FileChange struct {
+	Path     string `json:"path"`
+	Type     string `json:"type"` // "modified", "added", "deleted"
+	Size     int64  `json:"size"`
+}
+
+// ChangesResult 变更检查结果
+type ChangesResult struct {
+	HasChanges bool         `json:"has_changes"`
+	Changes    []FileChange `json:"changes"`
+	Summary    string       `json:"summary"`
+}
+
+// CheckChanges 检查文件变更
+func (a *App) CheckChanges(siteName string) (*ChangesResult, error) {
+	// 获取绑定的目录
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	if config.SitePaths == nil {
+		return nil, fmt.Errorf("没有绑定任何目录")
+	}
+
+	sitePath, exists := config.SitePaths[siteName]
+	if !exists {
+		return nil, fmt.Errorf("网站 %s 未绑定目录", siteName)
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(a.apiBaseURL, siteName)
+
+	// 扫描当前文件
+	currentFiles, err := deployer.ScanFiles(sitePath)
+	if err != nil {
+		return nil, fmt.Errorf("扫描文件失败: %v", err)
+	}
+
+	// 加载之前的跟踪信息
+	trackingData, err := deployer.LoadTracking()
+	if err != nil {
+		// 第一次部署，所有文件都是新增的
+		changes := make([]FileChange, 0, len(currentFiles))
+		for _, f := range currentFiles {
+			changes = append(changes, FileChange{
+				Path: f.Path,
+				Type: "added",
+				Size: f.Size,
+			})
+		}
+
+		return &ChangesResult{
+			HasChanges: len(changes) > 0,
+			Changes:    changes,
+			Summary:    fmt.Sprintf("首次部署，共 %d 个文件", len(changes)),
+		}, nil
+	}
+
+	// 找出变更和删除的文件
+	changedFiles := deployer.FindChangedFiles(currentFiles, trackingData.Files)
+	deletedFiles := deployer.FindDeletedFiles(currentFiles, trackingData.Files)
+
+	// 构建变更列表
+	changes := make([]FileChange, 0, len(changedFiles)+len(deletedFiles))
+
+	// 添加修改和新增的文件
+	prevMap := make(map[string]FileStatus)
+	for _, f := range trackingData.Files {
+		prevMap[f.Path] = f
+	}
+
+	for _, f := range changedFiles {
+		changeType := "modified"
+		if _, exists := prevMap[f.Path]; !exists {
+			changeType = "added"
+		}
+
+		changes = append(changes, FileChange{
+			Path: f.Path,
+			Type: changeType,
+			Size: f.Size,
+		})
+	}
+
+	// 添加删除的文件
+	for _, path := range deletedFiles {
+		changes = append(changes, FileChange{
+			Path: path,
+			Type: "deleted",
+			Size: 0,
+		})
+	}
+
+	// 生成摘要
+	addedCount := 0
+	modifiedCount := 0
+	deletedCount := 0
+	for _, c := range changes {
+		switch c.Type {
+		case "added":
+			addedCount++
+		case "modified":
+			modifiedCount++
+		case "deleted":
+			deletedCount++
+		}
+	}
+
+	summary := ""
+	if addedCount > 0 && modifiedCount > 0 && deletedCount > 0 {
+		summary = fmt.Sprintf("新增 %d，修改 %d，删除 %d", addedCount, modifiedCount, deletedCount)
+	} else if addedCount > 0 && modifiedCount > 0 {
+		summary = fmt.Sprintf("新增 %d，修改 %d", addedCount, modifiedCount)
+	} else if addedCount > 0 && deletedCount > 0 {
+		summary = fmt.Sprintf("新增 %d，删除 %d", addedCount, deletedCount)
+	} else if modifiedCount > 0 && deletedCount > 0 {
+		summary = fmt.Sprintf("修改 %d，删除 %d", modifiedCount, deletedCount)
+	} else if addedCount > 0 {
+		summary = fmt.Sprintf("新增 %d 个文件", addedCount)
+	} else if modifiedCount > 0 {
+		summary = fmt.Sprintf("修改 %d 个文件", modifiedCount)
+	} else if deletedCount > 0 {
+		summary = fmt.Sprintf("删除 %d 个文件", deletedCount)
+	} else {
+		summary = "没有变更"
+	}
+
+	return &ChangesResult{
+		HasChanges: len(changes) > 0,
+		Changes:    changes,
+		Summary:    summary,
+	}, nil
+}
+
+// PullSite 从服务器覆盖本地
+func (a *App) PullSite(name string) error {
+	// 从配置中获取绑定的目录
+	dirPath, ok := a.config.SitePaths[name]
+	if !ok || dirPath == "" {
+		return fmt.Errorf("网站 '%s' 未绑定发布目录", name)
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(a.apiBaseURL, name)
+
+	// 执行下载并覆盖
+	if err := deployer.PullFromServer(dirPath); err != nil {
+		return err
+	}
+
+	return nil
+}

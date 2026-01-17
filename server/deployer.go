@@ -79,6 +79,7 @@ func (s *DeployServer) Start() error {
 	mux.HandleFunc("/api/sites/versions", s.corsMiddleware(s.authMiddleware(s.handleVersions)))
 	mux.HandleFunc("/api/sites/rollback", s.corsMiddleware(s.authMiddleware(s.handleRollback)))
 	mux.HandleFunc("/api/sites/list", s.corsMiddleware(s.authMiddleware(s.handleListSites)))
+	mux.HandleFunc("/api/sites/export", s.corsMiddleware(s.authMiddleware(s.handleExport)))
 
 	// 创建静态文件处理器
 	var staticHandler http.Handler
@@ -833,4 +834,93 @@ type FileHash struct {
 // FileHashList 文件哈希列表
 type FileHashList struct {
 	Files []FileHash `json:"files"`
+}
+
+// handleExport 导出网站文件（打包下载）
+func (s *DeployServer) handleExport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		s.respondError(w, "网站名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	sitePath := filepath.Join(s.config.WebRoot, name)
+	if _, err := os.Stat(sitePath); os.IsNotExist(err) {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 设置响应头为tar.gz文件
+	w.Header().Set("Content-Type", "application/x-gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.tar.gz", name))
+
+	// 创建gzip writer
+	gzWriter := gzip.NewWriter(w)
+	defer gzWriter.Close()
+
+	// 创建tar writer
+	tarWriter := tar.NewWriter(gzWriter)
+	defer tarWriter.Close()
+
+	// 遍历网站目录并打包
+	err := filepath.Walk(sitePath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 跳过根目录本身
+		if path == sitePath {
+			return nil
+		}
+
+		// 跳过.git目录
+		if strings.Contains(path, ".git") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// 获取相对路径
+		relPath, err := filepath.Rel(sitePath, path)
+		if err != nil {
+			return err
+		}
+
+		// 创建tar头
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = relPath
+
+		// 写入头
+		if err := tarWriter.WriteHeader(header); err != nil {
+			return err
+		}
+
+		// 如果是文件，写入内容
+		if !info.IsDir() {
+			file, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer file.Close()
+
+			_, err = io.Copy(tarWriter, file)
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		// 如果出错，尝试写入错误信息（可能已经写入了一些数据）
+		fmt.Printf("导出文件失败: %v\n", err)
+	}
 }

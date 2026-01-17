@@ -266,6 +266,9 @@ deploy-cli versions my-prototype
 
 # 回滚到指定版本
 deploy-cli rollback my-prototype abc1234
+
+# 从服务器覆盖本地（下载最新文件到本地）
+deploy-cli pull my-prototype
 ```
 
 ## 部署模式说明

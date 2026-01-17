@@ -123,6 +123,18 @@ deploy-cli rollback my-website abc1234
 deploy-cli rollback my-website abc1234 "回滚到上一个稳定版本"
 ```
 
+### 从服务器覆盖本地
+```bash
+# 从服务器下载最新文件并覆盖本地目录
+deploy-cli pull my-website
+
+# 说明：
+# - 此命令会从服务器下载网站的所有文件
+# - 本地目录会被清空（隐藏文件除外）
+# - 下载的文件会覆盖到绑定的本地目录
+# - 适用于在不同机器间同步代码或恢复本地文件
+```
+
 ---
 
 ## 帮助命令
@@ -307,4 +319,5 @@ deploy-cli deploy my-project ./dist 2>&1 | tee error.log
 | `list` | - | 列出所有网站 |
 | `versions` | `<name>` | 查看版本历史 |
 | `rollback` | `<name> <hash> [msg]` | 回滚版本 |
+| `pull` | `<name>` | 从服务器覆盖本地 |
 | `help` | - | 显示帮助 |

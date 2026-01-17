@@ -55,6 +55,8 @@ func main() {
 		handleVersions(apiBaseURL, apiKey, args[1:])
 	case "rollback":
 		handleRollback(apiBaseURL, apiKey, args[1:])
+	case "pull":
+		handlePull(apiBaseURL, apiKey, config, args[1:])
 	case "help":
 		printUsage()
 	default:
@@ -112,6 +114,7 @@ func printUsage() {
 	fmt.Println("  list                   列出所有网站")
 	fmt.Println("  versions <name>        查看网站版本历史")
 	fmt.Println("  rollback <name> <hash> 回滚到指定版本")
+	fmt.Println("  pull [name]            从服务器覆盖本地（自动匹配网站）")
 	fmt.Println("  help                   显示帮助信息")
 	fmt.Println("\n示例:")
 	fmt.Println("  deploy-cli config set server http://192.168.1.100:8080/api")
@@ -124,6 +127,7 @@ func printUsage() {
 	fmt.Println("  deploy-cli deploy my-prototype ./dist # 指定目录部署")
 	fmt.Println("  deploy-cli versions my-prototype")
 	fmt.Println("  deploy-cli rollback my-prototype abc123")
+	fmt.Println("  deploy-cli pull my-prototype             # 从服务器覆盖本地")
 }
 
 func handleCreate(apiBaseURL, apiKey string, args []string) {
@@ -827,4 +831,73 @@ func handleConfigGet() {
 	fmt.Println("  使用 'deploy-cli config set site <name> <dir>' 配置网站目录")
 	fmt.Println("  使用 'deploy-cli config remove site <name>' 移除网站目录")
 	fmt.Println("  使用 'deploy-cli deploy <name>' 直接部署已配置的网站")
+	fmt.Println("  使用 'deploy-cli pull <name>' 从服务器覆盖本地文件")
+}
+
+// handlePull 从服务器覆盖本地
+func handlePull(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+	var name, dirPath string
+
+	// 如果没有提供网站名称，尝试根据当前目录自动匹配
+	if len(args) < 1 {
+		matchedSites := findMatchingSites(config)
+		if len(matchedSites) == 0 {
+			fmt.Println("错误: 无法确定要下载的网站")
+			fmt.Println("\n请指定网站名称：")
+			fmt.Println("  deploy-cli pull <site-name>")
+			fmt.Println("\n或者先配置网站目录：")
+			fmt.Println("  deploy-cli config set site <site-name> <directory>")
+			os.Exit(1)
+		} else if len(matchedSites) > 1 {
+			fmt.Println("错误: 当前目录匹配到多个网站，请明确指定：")
+			for _, site := range matchedSites {
+				fmt.Printf("  - %s (%s)\n", site, config.SitePaths[site])
+			}
+			fmt.Println("\n使用方法: deploy-cli pull <site-name>")
+			os.Exit(1)
+		}
+
+		// 唯一匹配
+		name = matchedSites[0]
+		dirPath = config.SitePaths[name]
+		fmt.Printf("自动匹配到网站: %s\n", name)
+	} else {
+		name = args[0]
+
+		// 确定目录路径
+		if len(args) >= 2 {
+			// 命令行指定了目录
+			dirPath = args[1]
+		} else {
+			// 从配置读取目录
+			var ok bool
+			dirPath, ok = config.SitePaths[name]
+			if !ok || dirPath == "" {
+				fmt.Printf("错误: 网站 '%s' 未配置发布目录\n", name)
+				fmt.Println("\n请先配置网站目录，或者直接指定目录：")
+				fmt.Printf("  deploy-cli config set site %s ./dist\n", name)
+				fmt.Printf("  deploy-cli pull %s ./dist\n", name)
+				os.Exit(1)
+			}
+		}
+	}
+
+	// 确认操作
+	fmt.Printf("确定要从服务器下载网站 '%s' 并覆盖本地目录 '%s' 吗？(y/N): ", name, dirPath)
+	reader := bufio.NewReader(os.Stdin)
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+	if strings.ToLower(input) != "y" {
+		fmt.Println("取消操作")
+		return
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(apiBaseURL, name)
+
+	// 执行下载并覆盖
+	if err := deployer.PullFromServer(dirPath); err != nil {
+		fmt.Printf("下载失败: %v\n", err)
+		os.Exit(1)
+	}
 }
