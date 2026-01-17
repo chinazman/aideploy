@@ -4,11 +4,9 @@ FROM golang:1.21-alpine AS builder
 # 设置工作目录
 WORKDIR /build
 
-# 安装必要的构建工具
-RUN apk add --no-cache git
-
 # 复制 go.mod 和 go.sum (如果存在)
-COPY go.mod go.sum* ./
+COPY go.mod ./
+COPY go.sum* ./
 
 # 下载依赖
 RUN go mod download || true
