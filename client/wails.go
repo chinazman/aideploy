@@ -48,6 +48,7 @@ func main() {
 type App struct {
 	apiBaseURL string
 	apiKey     string
+	config     *ClientConfig
 }
 
 // NewApp 创建应用实例
@@ -67,6 +68,7 @@ func NewApp() *App {
 	return &App{
 		apiBaseURL: apiBaseURL,
 		apiKey:     apiKey,
+		config:     config,
 	}
 }
 
@@ -171,11 +173,23 @@ func (a *App) DeleteSite(name string) error {
 	return nil
 }
 
-// DeploySite 部署网站 (简化版，只支持单文件)
-func (a *App) DeploySite(name, filePath, message string) error {
-	// 这里简化实现，实际应该使用 deployer.go 中的完整部署逻辑
-	// 为了快速编译，先返回一个占位实现
-	return fmt.Errorf("请使用 CLI 工具进行部署: deploy-cli deploy %s <目录>", name)
+// DeploySite 部署网站 (使用绑定的目录)
+func (a *App) DeploySite(name, message string) error {
+	// 从配置中获取绑定的目录
+	dirPath, ok := a.config.SitePaths[name]
+	if !ok || dirPath == "" {
+		return fmt.Errorf("网站 '%s' 未绑定发布目录", name)
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(a.apiBaseURL, name)
+
+	// 执行智能部署
+	if err := deployer.Deploy(dirPath, message); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ListSites 列出所有网站
@@ -283,6 +297,57 @@ func (a *App) Rollback(name, hash, message string) error {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf(string(body))
 	}
+
+	return nil
+}
+
+// GetConfig 获取当前配置
+func (a *App) GetConfig() (*ClientConfig, error) {
+	config, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	return config, nil
+}
+
+// SaveConfig 保存配置
+func (a *App) SaveConfig(config *ClientConfig) error {
+	// 更新内存中的配置
+	a.config = config
+	a.apiBaseURL = config.ServerURL
+	a.apiKey = config.APIKey
+
+	// 保存到文件
+	if err := SaveConfig(config); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// BindSiteDirectory 绑定网站目录
+func (a *App) BindSiteDirectory(siteName, dirPath string) error {
+	// 加载当前配置
+	config, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+
+	// 确保SitePaths初始化
+	if config.SitePaths == nil {
+		config.SitePaths = make(map[string]string)
+	}
+
+	// 绑定目录
+	config.SitePaths[siteName] = dirPath
+
+	// 保存配置
+	if err := SaveConfig(config); err != nil {
+		return err
+	}
+
+	// 更新内存中的配置
+	a.config = config
 
 	return nil
 }

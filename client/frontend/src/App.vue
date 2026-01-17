@@ -1,137 +1,200 @@
 <template>
   <div id="app">
-    <div class="container">
-      <header>
-        <h1>🚀 AI原型部署工具</h1>
-        <p class="subtitle">快速发布您的HTML原型</p>
-      </header>
+    <!-- 侧边导航栏 -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <h1>AI Deploy</h1>
+      </div>
+      <div class="nav-items">
+        <div
+          class="nav-item"
+          :class="{ active: currentView === 'sites' }"
+          @click="currentView = 'sites'"
+        >
+          <div class="nav-icon">🌐</div>
+          <div class="nav-text">网站管理</div>
+        </div>
+        <div
+          class="nav-item"
+          :class="{ active: currentView === 'config' }"
+          @click="currentView = 'config'"
+        >
+          <div class="nav-icon">⚙️</div>
+          <div class="nav-text">系统配置</div>
+        </div>
+      </div>
+    </nav>
 
-      <div class="main-content">
-        <!-- 左侧面板 - 操作区 -->
-        <div class="left-panel">
-          <div class="card">
-            <h2>创建新网站</h2>
-            <div class="form-group">
-              <label>网站名称</label>
-              <input
-                v-model="newSiteName"
-                type="text"
-                placeholder="例如: my-prototype"
-                @keyup.enter="createSite"
-              />
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 网站管理视图 -->
+      <div v-show="currentView === 'sites'" class="view-container">
+        <div class="view-header">
+          <h2>网站管理</h2>
+        </div>
+
+        <div class="content-grid">
+          <!-- 创建网站卡片 -->
+          <div class="tile">
+            <div class="tile-header">
+              <h3>创建新网站</h3>
             </div>
-            <button @click="createSite" :disabled="!newSiteName">
-              创建网站
-            </button>
+            <div class="tile-body">
+              <div class="input-group">
+                <input
+                  v-model="newSiteName"
+                  type="text"
+                  placeholder="网站名称"
+                  @keyup.enter="createSite"
+                />
+              </div>
+              <button @click="createSite" :disabled="!newSiteName" class="primary-btn">
+                创建
+              </button>
+            </div>
           </div>
 
-          <div class="card">
-            <h2>部署网站</h2>
-            <div class="form-group">
-              <label>选择网站</label>
-              <select v-model="selectedSite">
-                <option value="">-- 请选择 --</option>
-                <option v-for="site in sites" :key="site" :value="site">
-                  {{ site }}
-                </option>
-              </select>
+          <!-- 部署网站卡片 -->
+          <div class="tile">
+            <div class="tile-header">
+              <h3>部署网站</h3>
             </div>
-            <div class="form-group">
-              <label>选择文件</label>
-              <input
-                type="file"
-                ref="fileInput"
-                accept=".html,.htm"
-                @change="handleFileSelect"
-              />
+            <div class="tile-body">
+              <div class="input-group">
+                <select v-model="selectedSite">
+                  <option value="">选择网站</option>
+                  <option v-for="site in sites" :key="site" :value="site">
+                    {{ site }}
+                  </option>
+                </select>
+              </div>
+              <div class="input-group">
+                <input
+                  type="text"
+                  v-model="deployMessage"
+                  placeholder="版本说明 (可选)"
+                />
+              </div>
+              <button
+                @click="deploySite"
+                :disabled="!selectedSite"
+                class="success-btn"
+              >
+                部署
+              </button>
+              <p class="hint-text">将使用绑定的目录进行部署</p>
             </div>
-            <div class="form-group">
-              <label>版本说明</label>
-              <input
-                v-model="deployMessage"
-                type="text"
-                placeholder="例如: 更新首页设计"
-              />
-            </div>
-            <button
-              @click="deploySite"
-              :disabled="!selectedSite || !selectedFile"
+          </div>
+        </div>
+
+        <!-- 网站列表 -->
+        <div class="tile-list">
+          <div class="tile-list-header">
+            <h3>网站列表</h3>
+            <button @click="loadSites" class="icon-btn">🔄</button>
+          </div>
+          <div v-if="sites.length === 0" class="empty-state">
+            <p>暂无网站</p>
+          </div>
+          <div v-else class="list-items">
+            <div
+              v-for="site in sites"
+              :key="site"
+              class="list-item"
+              :class="{ active: selectedSite === site }"
             >
-              部署
-            </button>
-          </div>
-        </div>
-
-        <!-- 右侧面板 - 网站列表 -->
-        <div class="right-panel">
-          <div class="card">
-            <div class="card-header">
-              <h2>网站列表</h2>
-              <button @click="loadSites" class="refresh-btn">🔄 刷新</button>
-            </div>
-            <div v-if="sites.length === 0" class="empty-state">
-              <p>暂无网站</p>
-              <p class="hint">创建一个网站开始部署</p>
-            </div>
-            <div v-else class="site-list">
-              <div
-                v-for="site in sites"
-                :key="site"
-                class="site-item"
-                :class="{ active: selectedSite === site }"
-                @click="selectSite(site)"
-              >
-                <div class="site-info">
-                  <h3>{{ site }}</h3>
-                  <button @click.stop="showVersions(site)" class="view-versions-btn">
-                    📜 查看版本
-                  </button>
-                  <button @click.stop="deleteSite(site)" class="delete-btn">
-                    🗑️ 删除
-                  </button>
+              <div class="item-main" @click="selectSite(site)">
+                <div class="item-icon">🌐</div>
+                <div class="item-content">
+                  <div class="item-title">{{ site }}</div>
+                  <div class="item-subtitle" v-if="config.site_paths && config.site_paths[site]">
+                    {{ config.site_paths[site] }}
+                  </div>
+                  <div class="item-subtitle" v-else>
+                    未绑定目录
+                  </div>
                 </div>
+              </div>
+              <div class="item-actions">
+                <button @click="bindDirectory(site)" class="action-btn" title="绑定目录">📁</button>
+                <button @click="showVersions(site)" class="action-btn" title="版本历史">📜</button>
+                <button @click="deleteSite(site)" class="action-btn danger" title="删除">🗑️</button>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 版本历史对话框 -->
-      <div v-if="showVersionsModal" class="modal" @click.self="closeVersionsModal">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2>版本历史 - {{ currentVersionsSite }}</h2>
-            <button @click="closeVersionsModal" class="close-btn">✕</button>
-          </div>
-          <div class="modal-body">
-            <div v-if="versions.length === 0" class="empty-state">
-              <p>暂无版本记录</p>
+      <!-- 配置视图 -->
+      <div v-show="currentView === 'config'" class="view-container">
+        <div class="view-header">
+          <h2>系统配置</h2>
+        </div>
+
+        <div class="tile-list">
+          <div class="tile">
+            <div class="tile-header">
+              <h3>服务器配置</h3>
             </div>
-            <div v-else class="versions-list">
-              <div
-                v-for="(version, index) in versions"
-                :key="version.hash"
-                class="version-item"
-              >
-                <div class="version-header">
-                  <span class="version-hash">{{ version.hash.substring(0, 7) }}</span>
-                  <span class="version-date">{{ formatDate(version.date) }}</span>
-                </div>
-                <div class="version-message">{{ version.message }}</div>
-                <div class="version-author">👤 {{ version.author }}</div>
-                <button @click="rollbackTo(version.hash)" class="rollback-btn">
-                  ↩️ 回滚到此版本
-                </button>
+            <div class="tile-body">
+              <div class="input-group">
+                <label>服务器地址</label>
+                <input
+                  v-model="config.server_url"
+                  type="text"
+                  placeholder="http://localhost:8080/api"
+                />
               </div>
+              <div class="input-group">
+                <label>API 密钥</label>
+                <input
+                  v-model="config.api_key"
+                  type="password"
+                  placeholder="可选"
+                />
+              </div>
+              <button @click="saveConfig" class="primary-btn">保存配置</button>
             </div>
           </div>
         </div>
       </div>
+    </main>
 
-      <!-- 消息提示 -->
-      <div v-if="message" class="message" :class="messageType">
-        {{ message }}
+    <!-- 版本历史对话框 -->
+    <div v-if="showVersionsModal" class="modal" @click.self="closeVersionsModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>版本历史 - {{ currentVersionsSite }}</h2>
+          <button @click="closeVersionsModal" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="versions.length === 0" class="empty-state">
+            <p>暂无版本记录</p>
+          </div>
+          <div v-else class="versions-list">
+            <div
+              v-for="(version, index) in versions"
+              :key="version.hash"
+              class="version-item"
+            >
+              <div class="version-header">
+                <span class="version-hash">{{ version.hash.substring(0, 7) }}</span>
+                <span class="version-date">{{ formatDate(version.date) }}</span>
+              </div>
+              <div class="version-message">{{ version.message }}</div>
+              <div class="version-author">👤 {{ version.author }}</div>
+              <button @click="rollbackTo(version.hash)" class="warning-btn">
+                ↩️ 回滚
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div v-if="message" class="toast" :class="messageType">
+      {{ message }}
     </div>
   </div>
 </template>
@@ -141,22 +204,46 @@ export default {
   name: 'App',
   data() {
     return {
+      currentView: 'sites',
       sites: [],
       newSiteName: '',
       selectedSite: '',
-      selectedFile: null,
       deployMessage: '',
       versions: [],
       currentVersionsSite: '',
       showVersionsModal: false,
       message: '',
-      messageType: 'info'
+      messageType: 'info',
+      config: {
+        server_url: 'http://localhost:8080/api',
+        api_key: '',
+        site_paths: {}
+      }
     }
   },
   mounted() {
+    this.loadConfig()
     this.loadSites()
   },
   methods: {
+    async loadConfig() {
+      try {
+        const config = await window.go.main.App.GetConfig()
+        this.config = config
+      } catch (error) {
+        console.error('加载配置失败:', error)
+      }
+    },
+
+    async saveConfig() {
+      try {
+        await window.go.main.App.SaveConfig(this.config)
+        this.showMessage('配置保存成功', 'success')
+      } catch (error) {
+        this.showMessage('保存配置失败: ' + error, 'error')
+      }
+    },
+
     async loadSites() {
       try {
         const sites = await window.go.main.App.ListSites()
@@ -182,26 +269,42 @@ export default {
       }
     },
 
-    handleFileSelect(event) {
-      this.selectedFile = event.target.files[0]
+    async bindDirectory(site) {
+      const path = prompt('请输入本地目录路径:', this.config.site_paths[site] || '')
+      if (path === null) return
+
+      if (!path.trim()) {
+        this.showMessage('目录路径不能为空', 'error')
+        return
+      }
+
+      try {
+        await window.go.main.App.BindSiteDirectory(site, path.trim())
+        this.config.site_paths[site] = path.trim()
+        this.showMessage('目录绑定成功', 'success')
+      } catch (error) {
+        this.showMessage('绑定目录失败: ' + error, 'error')
+      }
     },
 
     async deploySite() {
-      if (!this.selectedSite || !this.selectedFile) {
-        this.showMessage('请选择网站和文件', 'error')
+      if (!this.selectedSite) {
+        this.showMessage('请选择网站', 'error')
+        return
+      }
+
+      if (!this.config.site_paths[this.selectedSite]) {
+        this.showMessage('请先绑定网站目录', 'error')
         return
       }
 
       try {
         await window.go.main.App.DeploySite(
           this.selectedSite,
-          this.selectedFile.path,
           this.deployMessage || '更新部署'
         )
         this.showMessage('部署成功!', 'success')
         this.deployMessage = ''
-        this.selectedFile = null
-        this.$refs.fileInput.value = ''
       } catch (error) {
         this.showMessage('部署失败: ' + error, 'error')
       }
@@ -222,6 +325,7 @@ export default {
         if (this.selectedSite === site) {
           this.selectedSite = ''
         }
+        delete this.config.site_paths[site]
         await this.loadSites()
       } catch (error) {
         this.showMessage('删除失败: ' + error, 'error')
@@ -279,124 +383,191 @@ export default {
 </script>
 
 <style scoped>
+/* Metro 风格全局样式 */
 #app {
+  display: flex;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
+  background: #f0f0f0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-.container {
-  max-width: 1400px;
+/* 侧边导航栏 */
+.sidebar {
+  width: 240px;
+  background: #1e1e1e;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+}
+
+.sidebar-header {
+  padding: 40px 20px 30px;
+  border-bottom: 1px solid #333;
+}
+
+.sidebar-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 300;
+  letter-spacing: 2px;
+}
+
+.nav-items {
+  flex: 1;
+  padding: 20px 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-left: 3px solid transparent;
+}
+
+.nav-item:hover {
+  background: #2d2d2d;
+}
+
+.nav-item.active {
+  background: #0078d7;
+  border-left-color: #fff;
+}
+
+.nav-icon {
+  font-size: 24px;
+  margin-right: 12px;
+}
+
+.nav-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 主内容区 */
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  background: #f0f0f0;
+}
+
+.view-container {
+  padding: 40px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-header {
-  text-align: center;
-  color: white;
+.view-header {
   margin-bottom: 30px;
 }
 
-header h1 {
-  font-size: 2.5em;
+.view-header h2 {
   margin: 0;
-  text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+  font-size: 32px;
+  font-weight: 300;
+  color: #1e1e1e;
 }
 
-.subtitle {
-  font-size: 1.2em;
-  opacity: 0.9;
-  margin-top: 10px;
-}
-
-.main-content {
+/* Metro Tile 布局 */
+.content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 20px;
+  margin-bottom: 30px;
 }
 
-.left-panel, .right-panel {
+.tile {
+  background: white;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+  cursor: default;
+}
+
+.tile:hover {
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+  transform: translateY(-2px);
+}
+
+.tile-header {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #0078d7;
+}
+
+.tile-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+  color: #1e1e1e;
+}
+
+.tile-body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 15px;
 }
 
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.card h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-  font-size: 1.5em;
-}
-
-.card-header {
+/* 输入组 */
+.input-group {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.refresh-btn {
-  background: #667eea;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9em;
+.input-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.refresh-btn:hover {
-  background: #5568d3;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  color: #555;
-  font-weight: 500;
-}
-
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 10px;
+.input-group input,
+.input-group select {
+  padding: 10px 12px;
   border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  background: white;
   font-size: 14px;
+  transition: all 0.2s;
   box-sizing: border-box;
 }
 
-.form-group input:focus,
-.form-group select:focus {
+.input-group input:focus,
+.input-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #0078d7;
 }
 
+.hint-text {
+  margin: 0;
+  font-size: 12px;
+  color: #999;
+  font-style: italic;
+}
+
+/* Metro 风格按钮 */
 button {
-  background: #667eea;
-  color: white;
-  border: none;
   padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
+  border: none;
+  font-size: 14px;
   font-weight: 500;
-  width: 100%;
-  transition: background 0.2s;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  min-height: 40px;
 }
 
 button:hover:not(:disabled) {
-  background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 button:disabled {
@@ -404,76 +575,151 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.site-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.primary-btn {
+  background: #0078d7;
+  color: white;
 }
 
-.site-item {
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 16px;
-  cursor: pointer;
+.primary-btn:hover:not(:disabled) {
+  background: #005a9e;
+}
+
+.success-btn {
+  background: #107c10;
+  color: white;
+}
+
+.success-btn:hover:not(:disabled) {
+  background: #0b5c0b;
+}
+
+.warning-btn {
+  background: #d83b01;
+  color: white;
+}
+
+.warning-btn:hover:not(:disabled) {
+  background: #a52c00;
+}
+
+.icon-btn {
+  background: transparent;
+  color: #666;
+  padding: 8px;
+  min-height: auto;
+  font-size: 18px;
+}
+
+.icon-btn:hover {
+  background: #e0e0e0;
+}
+
+.action-btn {
+  background: #e0e0e0;
+  color: #333;
+  padding: 8px 12px;
+  min-height: auto;
+  margin-left: 8px;
+}
+
+.action-btn:hover {
+  background: #d0d0d0;
+}
+
+.action-btn.danger {
+  background: #d13438;
+  color: white;
+}
+
+.action-btn.danger:hover {
+  background: #a52c00;
+}
+
+/* 列表样式 */
+.tile-list {
+  background: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.tile-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.tile-list-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+.list-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
   transition: all 0.2s;
 }
 
-.site-item:hover {
-  border-color: #667eea;
-  background: #f8f9ff;
+.list-item:hover {
+  background: #f8f8f8;
 }
 
-.site-item.active {
-  border-color: #667eea;
-  background: #f0f2ff;
+.list-item.active {
+  background: #e8f4ff;
+  border-left: 3px solid #0078d7;
 }
 
-.site-info h3 {
-  margin: 0 0 12px 0;
-  color: #333;
-}
-
-.site-info {
+.item-main {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex: 1;
+  cursor: pointer;
 }
 
-.view-versions-btn {
-  background: #48bb78;
-  padding: 6px 12px;
-  font-size: 14px;
-  width: auto;
+.item-icon {
+  font-size: 28px;
+  margin-right: 16px;
 }
 
-.view-versions-btn:hover {
-  background: #38a169;
+.item-content {
+  flex: 1;
 }
 
-.delete-btn {
-  background: #f56565;
-  padding: 6px 12px;
-  font-size: 14px;
-  width: auto;
+.item-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #1e1e1e;
+  margin-bottom: 4px;
 }
 
-.delete-btn:hover {
-  background: #e53e3e;
+.item-subtitle {
+  font-size: 13px;
+  color: #666;
+}
+
+.item-actions {
+  display: flex;
+  align-items: center;
 }
 
 .empty-state {
   text-align: center;
-  padding: 40px 20px;
+  padding: 60px 20px;
   color: #999;
 }
 
 .empty-state p {
-  margin: 8px 0;
-}
-
-.hint {
-  font-size: 0.9em;
+  margin: 0;
+  font-size: 16px;
 }
 
 /* 模态框 */
@@ -483,7 +729,7 @@ button:disabled {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -492,37 +738,29 @@ button:disabled {
 
 .modal-content {
   background: white;
-  border-radius: 12px;
-  padding: 24px;
   max-width: 700px;
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3);
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  padding: 20px;
+  border-bottom: 2px solid #0078d7;
 }
 
 .modal-header h2 {
   margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
   font-size: 24px;
-  cursor: pointer;
-  width: auto;
-  padding: 0;
-  color: #999;
+  font-weight: 400;
 }
 
-.close-btn:hover {
-  color: #333;
+.modal-body {
+  padding: 20px;
 }
 
 .versions-list {
@@ -532,76 +770,65 @@ button:disabled {
 }
 
 .version-item {
-  border: 2px solid #e0e0e0;
-  border-radius: 8px;
   padding: 16px;
-  position: relative;
+  border: 1px solid #e0e0e0;
+  background: #fafafa;
 }
 
 .version-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .version-hash {
-  font-family: monospace;
-  font-weight: bold;
-  color: #667eea;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-weight: 600;
+  color: #0078d7;
+  font-size: 14px;
 }
 
 .version-date {
-  color: #999;
-  font-size: 0.9em;
+  color: #666;
+  font-size: 13px;
 }
 
 .version-message {
   margin: 8px 0;
   color: #333;
+  font-size: 14px;
 }
 
 .version-author {
   color: #666;
-  font-size: 0.9em;
+  font-size: 13px;
   margin-bottom: 12px;
 }
 
-.rollback-btn {
-  background: #ed8936;
-  font-size: 14px;
-  padding: 8px 16px;
-  width: auto;
-}
-
-.rollback-btn:hover {
-  background: #dd6b20;
-}
-
-/* 消息提示 */
-.message {
+/* Toast 提示 */
+.toast {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: 30px;
+  right: 30px;
   padding: 16px 24px;
-  border-radius: 8px;
   color: white;
   font-weight: 500;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   animation: slideIn 0.3s ease;
-  max-width: 400px;
   z-index: 2000;
+  min-width: 300px;
 }
 
-.message.success {
-  background: #48bb78;
+.toast.success {
+  background: #107c10;
 }
 
-.message.error {
-  background: #f56565;
+.toast.error {
+  background: #d13438;
 }
 
-.message.info {
-  background: #4299e1;
+.toast.info {
+  background: #0078d7;
 }
 
 @keyframes slideIn {
@@ -615,8 +842,34 @@ button:disabled {
   }
 }
 
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .main-content {
+  #app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+
+  .nav-items {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .nav-item {
+    flex: 1;
+    justify-content: center;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+  }
+
+  .nav-item.active {
+    border-left: none;
+    border-bottom-color: #fff;
+  }
+
+  .content-grid {
     grid-template-columns: 1fr;
   }
 }
