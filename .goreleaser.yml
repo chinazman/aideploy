@@ -62,21 +62,8 @@ changelog:
     - title: '其他更改'
       order: 999
 
-dockers:
-  - image_templates:
-      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:{{ .Version }}'
-      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:latest'
-    goos: linux
-    goarch: amd64
-    dockerfile: Dockerfile
-    use: buildx
-    build_flag_templates:
-      - --label=org.opencontainers.image.title={{ .ProjectName }}
-      - --label=org.opencontainers.image.description={{ .ProjectName }} Docker Image
-      - --label=org.opencontainers.image.version={{ .Version }}
-      - --label=org.opencontainers.image.created={{ .Date }}
-      - --label=org.opencontainers.image.revision={{ .Commit }}
-      - --label=org.opencontainers.image.source={{ .GitURL }}
+# Docker 构建由 .github/workflows/docker-release.yml 处理
+# GoReleaser 只负责构建二进制文件
 
 release:
   draft: false
