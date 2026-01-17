@@ -31,79 +31,42 @@
       <div v-show="currentView === 'sites'" class="view-container">
         <div class="view-header">
           <h2>网站管理</h2>
-        </div>
-
-        <div class="content-grid">
-          <!-- 创建网站卡片 -->
-          <div class="tile">
-            <div class="tile-header">
-              <h3>创建新网站</h3>
-            </div>
-            <div class="tile-body">
-              <div class="input-group">
-                <input
-                  v-model="newSiteName"
-                  type="text"
-                  placeholder="网站名称"
-                  @keyup.enter="createSite"
-                />
-              </div>
-              <button @click="createSite" :disabled="!newSiteName" class="primary-btn">
-                创建
-              </button>
-            </div>
-          </div>
-
-          <!-- 部署网站卡片 -->
-          <div class="tile">
-            <div class="tile-header">
-              <h3>部署网站</h3>
-            </div>
-            <div class="tile-body">
-              <div class="input-group">
-                <select v-model="selectedSite">
-                  <option value="">选择网站</option>
-                  <option v-for="site in sites" :key="site" :value="site">
-                    {{ site }}
-                  </option>
-                </select>
-              </div>
-              <div class="input-group">
-                <input
-                  type="text"
-                  v-model="deployMessage"
-                  placeholder="版本说明 (可选)"
-                />
-              </div>
-              <button
-                @click="deploySite"
-                :disabled="!selectedSite"
-                class="success-btn"
-              >
-                部署
-              </button>
-              <p class="hint-text">将使用绑定的目录进行部署</p>
-            </div>
-          </div>
+          <button @click="showCreateSiteModal = true" class="primary-btn">
+            + 新增网站
+          </button>
         </div>
 
         <!-- 网站列表 -->
         <div class="tile-list">
           <div class="tile-list-header">
-            <h3>网站列表</h3>
+            <div class="tabs">
+              <div
+                class="tab"
+                :class="{ active: siteListTab === 'bound' }"
+                @click="siteListTab = 'bound'"
+              >
+                已绑定网站
+              </div>
+              <div
+                class="tab"
+                :class="{ active: siteListTab === 'all' }"
+                @click="siteListTab = 'all'"
+              >
+                全部网站
+              </div>
+            </div>
             <button @click="loadSites" class="icon-btn">🔄</button>
           </div>
-          <div v-if="sites.length === 0" class="empty-state">
-            <p>暂无网站</p>
+          <div v-if="filteredSites.length === 0" class="empty-state">
+            <p>{{ siteListTab === 'bound' ? '暂无已绑定网站' : '暂无网站' }}</p>
           </div>
           <div v-else class="list-items">
             <div
-              v-for="site in sites"
+              v-for="site in filteredSites"
               :key="site"
               class="list-item"
-              :class="{ active: selectedSite === site }"
             >
-              <div class="item-main" @click="selectSite(site)">
+              <div class="item-main">
                 <div class="item-icon">🌐</div>
                 <div class="item-content">
                   <div class="item-title">{{ site }}</div>
@@ -116,7 +79,22 @@
                 </div>
               </div>
               <div class="item-actions">
-                <button @click="bindDirectory(site)" class="action-btn" title="绑定目录">📁</button>
+                <button
+                  v-if="config.site_paths && config.site_paths[site]"
+                  @click="showDeployModal(site)"
+                  class="action-btn success"
+                  title="发布"
+                >
+                  🚀 发布
+                </button>
+                <button
+                  v-else
+                  @click="bindDirectory(site)"
+                  class="action-btn"
+                  title="绑定目录"
+                >
+                  📁 绑定目录
+                </button>
                 <button @click="showVersions(site)" class="action-btn" title="版本历史">📜</button>
                 <button @click="deleteSite(site)" class="action-btn danger" title="删除">🗑️</button>
               </div>
@@ -159,6 +137,74 @@
         </div>
       </div>
     </main>
+
+    <!-- 新增网站对话框 -->
+    <div v-if="showCreateSiteModal" class="modal" @click.self="closeCreateSiteModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>新增网站</h2>
+          <button @click="closeCreateSiteModal" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>网站名称</label>
+            <input
+              v-model="newSiteName"
+              type="text"
+              placeholder="请输入网站名称"
+              @keyup.enter="createSite"
+            />
+          </div>
+          <div class="input-group">
+            <label>绑定目录</label>
+            <div class="path-input-group">
+              <input
+                v-model="newSitePath"
+                type="text"
+                placeholder="请输入本地目录路径"
+                @keyup.enter="createSite"
+              />
+              <button @click="selectDirectory" class="secondary-btn">选择目录</button>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button @click="closeCreateSiteModal" class="secondary-btn">取消</button>
+            <button @click="createSite" :disabled="!newSiteName || !newSitePath" class="primary-btn">
+              创建并绑定
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 发布对话框 -->
+    <div v-if="showDeployModalFlag" class="modal" @click.self="closeDeployModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>发布网站 - {{ currentDeploySite }}</h2>
+          <button @click="closeDeployModal" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>版本说明</label>
+            <input
+              v-model="deployMessage"
+              type="text"
+              placeholder="请输入本次发布的说明（可选）"
+              @keyup.enter="executeDeploy"
+            />
+          </div>
+          <div class="info-box">
+            <p>将使用绑定的目录进行部署:</p>
+            <p class="info-path">{{ config.site_paths && config.site_paths[currentDeploySite] }}</p>
+          </div>
+          <div class="modal-actions">
+            <button @click="closeDeployModal" class="secondary-btn">取消</button>
+            <button @click="executeDeploy" class="success-btn">发布</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 版本历史对话框 -->
     <div v-if="showVersionsModal" class="modal" @click.self="closeVersionsModal">
@@ -207,18 +253,33 @@ export default {
       currentView: 'sites',
       sites: [],
       newSiteName: '',
+      newSitePath: '',
       selectedSite: '',
       deployMessage: '',
       versions: [],
       currentVersionsSite: '',
+      currentDeploySite: '',
       showVersionsModal: false,
+      showCreateSiteModal: false,
+      showDeployModalFlag: false,
       message: '',
       messageType: 'info',
+      siteListTab: 'bound',
       config: {
         server_url: 'http://localhost:8080/api',
         api_key: '',
         site_paths: {}
       }
+    }
+  },
+  computed: {
+    filteredSites() {
+      if (this.siteListTab === 'bound') {
+        return this.sites.filter(site =>
+          this.config.site_paths && this.config.site_paths[site]
+        )
+      }
+      return this.sites
     }
   },
   mounted() {
@@ -259,59 +320,94 @@ export default {
         return
       }
 
+      if (!this.newSitePath.trim()) {
+        this.showMessage('请选择或输入绑定目录', 'error')
+        return
+      }
+
       try {
         const site = await window.go.main.App.CreateSite(this.newSiteName)
+        await window.go.main.App.BindSiteDirectory(this.newSiteName, this.newSitePath.trim())
+
+        if (this.config.site_paths) {
+          this.config.site_paths[this.newSiteName] = this.newSitePath.trim()
+        }
+
         this.showMessage('网站创建成功! 域名: ' + site.domain, 'success')
         this.newSiteName = ''
+        this.newSitePath = ''
+        this.closeCreateSiteModal()
         await this.loadSites()
       } catch (error) {
         this.showMessage('创建失败: ' + error, 'error')
       }
     },
 
-    async bindDirectory(site) {
-      const path = prompt('请输入本地目录路径:', this.config.site_paths[site] || '')
-      if (path === null) return
-
-      if (!path.trim()) {
-        this.showMessage('目录路径不能为空', 'error')
-        return
-      }
-
+    async selectDirectory() {
       try {
-        await window.go.main.App.BindSiteDirectory(site, path.trim())
-        this.config.site_paths[site] = path.trim()
+        const path = await window.go.main.App.SelectDirectory()
+        if (path) {
+          this.newSitePath = path
+        }
+      } catch (error) {
+        this.showMessage('选择目录失败: ' + error, 'error')
+      }
+    },
+
+    closeCreateSiteModal() {
+      this.showCreateSiteModal = false
+      this.newSiteName = ''
+      this.newSitePath = ''
+    },
+
+    async bindDirectory(site) {
+      try {
+        const path = await window.go.main.App.SelectDirectory()
+        if (!path) {
+          return
+        }
+
+        await window.go.main.App.BindSiteDirectory(site, path)
+        this.config.site_paths[site] = path
         this.showMessage('目录绑定成功', 'success')
       } catch (error) {
         this.showMessage('绑定目录失败: ' + error, 'error')
       }
     },
 
-    async deploySite() {
-      if (!this.selectedSite) {
+    showDeployModal(site) {
+      this.currentDeploySite = site
+      this.deployMessage = ''
+      this.showDeployModalFlag = true
+    },
+
+    closeDeployModal() {
+      this.showDeployModalFlag = false
+      this.currentDeploySite = ''
+      this.deployMessage = ''
+    },
+
+    async executeDeploy() {
+      if (!this.currentDeploySite) {
         this.showMessage('请选择网站', 'error')
         return
       }
 
-      if (!this.config.site_paths[this.selectedSite]) {
+      if (!this.config.site_paths[this.currentDeploySite]) {
         this.showMessage('请先绑定网站目录', 'error')
         return
       }
 
       try {
         await window.go.main.App.DeploySite(
-          this.selectedSite,
+          this.currentDeploySite,
           this.deployMessage || '更新部署'
         )
         this.showMessage('部署成功!', 'success')
-        this.deployMessage = ''
+        this.closeDeployModal()
       } catch (error) {
         this.showMessage('部署失败: ' + error, 'error')
       }
-    },
-
-    selectSite(site) {
-      this.selectedSite = site
     },
 
     async deleteSite(site) {
@@ -461,6 +557,9 @@ export default {
 
 .view-header {
   margin-bottom: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .view-header h2 {
@@ -635,6 +734,15 @@ button:disabled {
   background: #a52c00;
 }
 
+.action-btn.success {
+  background: #107c10;
+  color: white;
+}
+
+.action-btn.success:hover {
+  background: #0b5c0b;
+}
+
 /* 列表样式 */
 .tile-list {
   background: white;
@@ -647,12 +755,52 @@ button:disabled {
   align-items: center;
   padding: 20px;
   border-bottom: 1px solid #e0e0e0;
+  flex-wrap: wrap;
+  gap: 15px;
 }
 
 .tile-list-header h3 {
   margin: 0;
   font-size: 20px;
   font-weight: 400;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0;
+  border: 2px solid #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.tab {
+  padding: 8px 20px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  background: #f5f5f5;
+  color: #666;
+  transition: all 0.2s;
+  border-right: 1px solid #e0e0e0;
+}
+
+.tab:last-child {
+  border-right: none;
+}
+
+.tab:hover {
+  background: #e8e8e8;
+}
+
+.tab.active {
+  background: #0078d7;
+  color: white;
+  border-color: #0078d7;
+}
+
+.tab.active + .tab {
+  border-left: none;
 }
 
 .list-items {
@@ -761,6 +909,58 @@ button:disabled {
 
 .modal-body {
   padding: 20px;
+}
+
+/* Modal actions */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Path input group */
+.path-input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.path-input-group input {
+  flex: 1;
+}
+
+/* Secondary button */
+.secondary-btn {
+  background: #666;
+  color: white;
+  padding: 10px 20px;
+  min-height: auto;
+}
+
+.secondary-btn:hover {
+  background: #555;
+}
+
+/* Info box */
+.info-box {
+  background: #f0f0f0;
+  padding: 15px;
+  border-radius: 4px;
+  margin: 15px 0;
+}
+
+.info-box p {
+  margin: 0 0 5px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.info-box .info-path {
+  margin: 5px 0 0 0;
+  font-size: 14px;
+  color: #0078d7;
+  font-weight: 500;
+  word-break: break-all;
 }
 
 .versions-list {

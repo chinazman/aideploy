@@ -582,17 +582,50 @@ func (s *DeployServer) getGitVersions(path string) ([]Version, error) {
 
 // rollbackVersion 回滚到指定版本
 func (s *DeployServer) rollbackVersion(path, hash, message string) error {
-	// 重置到指定版本
-	cmd := exec.Command("git", "reset", "--hard", hash)
+	// 先检查是否有未提交的更改
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = path
+	output, _ := cmd.Output()
+
+	// 如果有未提交的更改，先暂存
+	if len(strings.TrimSpace(string(output))) > 0 {
+		// 创建临时提交保存当前状态
+		cmd = exec.Command("git", "add", ".")
+		cmd.Dir = path
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("暂存当前状态失败: %v", err)
+		}
+
+		cmd = exec.Command("git", "commit", "-m", "临时提交：回滚前保存")
+		cmd.Dir = path
+		_ = cmd.Run() // 忽略错误，可能没有内容需要提交
+	}
+
+	// 使用 git checkout 恢复到指定版本
+	cmd = exec.Command("git", "checkout", hash, "--", ".")
 	cmd.Dir = path
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%v: %s", err, string(output))
+		return fmt.Errorf("回滚失败: %v: %s", err, string(output))
+	}
+
+	// 添加更改的文件
+	cmd = exec.Command("git", "add", "-A")
+	cmd.Dir = path
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("添加文件失败: %v", err)
 	}
 
 	// 创建回滚提交
-	if err := s.commitChanges(path, message); err != nil {
-		return err
+	cmd = exec.Command("git", "commit", "-m", message)
+	cmd.Dir = path
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		// 如果没有变更，说明已经在该版本，不算错误
+		if strings.Contains(string(output), "nothing to commit") {
+			return nil
+		}
+		return fmt.Errorf("创建回滚提交失败: %v: %s", err, string(output))
 	}
 
 	return nil

@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -46,6 +47,7 @@ func main() {
 
 // App 应用结构
 type App struct {
+	ctx        context.Context
 	apiBaseURL string
 	apiKey     string
 	config     *ClientConfig
@@ -74,7 +76,8 @@ func NewApp() *App {
 
 // startup 应用启动时调用
 func (a *App) startup(ctx context.Context) {
-	// 可以在这里初始化一些资源
+	// 保存 context 供后续使用
+	a.ctx = ctx
 }
 
 // shutdown 应用关闭时调用
@@ -350,4 +353,17 @@ func (a *App) BindSiteDirectory(siteName, dirPath string) error {
 	a.config = config
 
 	return nil
+}
+
+// SelectDirectory 选择目录
+func (a *App) SelectDirectory() (string, error) {
+	selection, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "选择网站目录",
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return selection, nil
 }
