@@ -1,3 +1,6 @@
+//go:build cli
+// +build cli
+
 package main
 
 import (
@@ -8,9 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -35,6 +36,10 @@ func main() {
 		handleDelete(args[1:])
 	case "deploy":
 		handleDeploy(args[1:])
+	case "deploy-full":
+		handleDeployFull(args[1:])
+	case "deploy-inc":
+		handleDeployIncremental(args[1:])
 	case "list":
 		handleList(args[1:])
 	case "versions":
@@ -57,14 +62,18 @@ func printUsage() {
 	fmt.Println("\n命令:")
 	fmt.Println("  create <name>          创建新网站")
 	fmt.Println("  delete <name>          删除网站")
-	fmt.Println("  deploy <name> <file>   部署网站（上传文件）")
+	fmt.Println("  deploy <name> <dir>    部署网站（智能选择增量或全量）")
+	fmt.Println("  deploy-full <name>     全量部署网站")
+	fmt.Println("  deploy-inc <name>      增量部署网站")
 	fmt.Println("  list                   列出所有网站")
 	fmt.Println("  versions <name>        查看网站版本历史")
 	fmt.Println("  rollback <name> <hash> 回滚到指定版本")
 	fmt.Println("  help                   显示帮助信息")
 	fmt.Println("\n示例:")
 	fmt.Println("  deploy-cli create my-prototype")
-	fmt.Println("  deploy-cli deploy my-prototype prototype.html")
+	fmt.Println("  deploy-cli deploy my-prototype ./dist")
+	fmt.Println("  deploy-cli deploy-full my-prototype ./dist")
+	fmt.Println("  deploy-cli deploy-inc my-prototype ./dist")
 	fmt.Println("  deploy-cli versions my-prototype")
 	fmt.Println("  deploy-cli rollback my-prototype abc123")
 }
@@ -161,122 +170,6 @@ func handleDelete(args []string) {
 	}
 
 	fmt.Println("✓ 网站删除成功!")
-}
-
-func handleDeploy(args []string) {
-	if len(args) < 2 {
-		fmt.Println("错误: 请提供网站名称和文件路径")
-		fmt.Println("用法: deploy-cli deploy <name> <file> [message]")
-		os.Exit(1)
-	}
-
-	name := args[0]
-	filePath := args[1]
-	message := "更新部署"
-
-	if len(args) > 2 {
-		message = strings.Join(args[2:], " ")
-	}
-
-	// 检查文件是否存在
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		fmt.Printf("错误: 文件不存在: %s\n", filePath)
-		os.Exit(1)
-	}
-
-	// 打开文件
-	file, err := os.Open(filePath)
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	// 创建multipart请求
-	var requestBody strings.Builder
-	boundary := "----WebKitFormBoundary" + time.Now().Format("20060102150405")
-
-	requestBody.WriteString("--" + boundary + "\r\n")
-	requestBody.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="name"%s\r\n\r\n`, "\r\n"))
-	requestBody.WriteString(name + "\r\n")
-
-	requestBody.WriteString("--" + boundary + "\r\n")
-	requestBody.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="message"%s\r\n\r\n`, "\r\n"))
-	requestBody.WriteString(message + "\r\n")
-
-	requestBody.WriteString("--" + boundary + "\r\n")
-	requestBody.WriteString(fmt.Sprintf(`Content-Disposition: form-data; name="file"; filename="%s"%s`, filepath.Base(filePath), "\r\n"))
-	requestBody.WriteString("Content-Type: application/octet-stream\r\n\r\n")
-
-	// 这里需要将文件内容写入，为简化使用http.PostForm
-	file.Seek(0, 0)
-
-	// 使用更简单的方法
-	req, err := http.NewRequest("POST", apiBaseURL+"/sites/deploy", nil)
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
-	}
-
-	// 创建临时文件来构建multipart请求
-	tempFile, err := os.CreateTemp("", "deploy-*.tmp")
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
-	}
-	defer os.Remove(tempFile.Name())
-	defer tempFile.Close()
-
-	// 写入multipart表单
-	writer := bufio.NewWriter(tempFile)
-	fmt.Fprintf(writer, "--%s\r\n", boundary)
-	fmt.Fprintf(writer, `Content-Disposition: form-data; name="name"%s\r\n\r\n`, "\r\n")
-	fmt.Fprintf(writer, "%s\r\n", name)
-
-	fmt.Fprintf(writer, "--%s\r\n", boundary)
-	fmt.Fprintf(writer, `Content-Disposition: form-data; name="message"%s\r\n\r\n`, "\r\n")
-	fmt.Fprintf(writer, "%s\r\n", message)
-
-	fmt.Fprintf(writer, "--%s\r\n", boundary)
-	fmt.Fprintf(writer, `Content-Disposition: form-data; name="file"; filename="%s"%s`, filepath.Base(filePath), "\r\n")
-	fmt.Fprintf(writer, "Content-Type: application/octet-stream\r\n\r\n")
-	writer.Flush()
-
-	// 复制文件内容
-	file.Seek(0, 0)
-	io.Copy(tempFile, file)
-
-	fmt.Fprintf(tempFile, "\r\n--%s--\r\n", boundary)
-	tempFile.Close()
-
-	// 重新打开临时文件读取内容
-	tempFile2, _ := os.Open(tempFile.Name())
-	defer tempFile2.Close()
-
-	req, err = http.NewRequest("POST", apiBaseURL+"/sites/deploy", tempFile2)
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
-	}
-
-	req.Header.Set("Content-Type", "multipart/form-data; boundary="+boundary)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("部署失败: %s\n", string(body))
-		os.Exit(1)
-	}
-
-	fmt.Println("✓ 部署成功!")
 }
 
 func handleList(args []string) {
@@ -416,4 +309,100 @@ func handleRollback(args []string) {
 	}
 
 	fmt.Println("✓ 回滚成功!")
+}
+
+// handleDeploy 智能部署（自动选择增量或全量）
+func handleDeploy(args []string) {
+	if len(args) < 2 {
+		fmt.Println("错误: 请提供网站名称和目录路径")
+		fmt.Println("用法: deploy-cli deploy <name> <directory>")
+		os.Exit(1)
+	}
+
+	name := args[0]
+	dirPath := args[1]
+	message := "更新部署"
+
+	if len(args) > 2 {
+		message = strings.Join(args[2:], " ")
+	}
+
+	// 检查目录是否存在
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		fmt.Printf("错误: 目录不存在: %s\n", dirPath)
+		os.Exit(1)
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(apiBaseURL, name)
+
+	// 执行智能部署
+	if err := deployer.Deploy(dirPath, message); err != nil {
+		fmt.Printf("部署失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// handleDeployFull 全量部署
+func handleDeployFull(args []string) {
+	if len(args) < 2 {
+		fmt.Println("错误: 请提供网站名称和目录路径")
+		fmt.Println("用法: deploy-cli deploy-full <name> <directory>")
+		os.Exit(1)
+	}
+
+	name := args[0]
+	dirPath := args[1]
+	message := "全量部署"
+
+	if len(args) > 2 {
+		message = strings.Join(args[2:], " ")
+	}
+
+	// 检查目录是否存在
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		fmt.Printf("错误: 目录不存在: %s\n", dirPath)
+		os.Exit(1)
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(apiBaseURL, name)
+
+	// 执行全量部署
+	if err := deployer.DeployFull(dirPath, message); err != nil {
+		fmt.Printf("部署失败: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// handleDeployIncremental 增量部署
+func handleDeployIncremental(args []string) {
+	if len(args) < 2 {
+		fmt.Println("错误: 请提供网站名称和目录路径")
+		fmt.Println("用法: deploy-cli deploy-inc <name> <directory>")
+		os.Exit(1)
+	}
+
+	name := args[0]
+	dirPath := args[1]
+	message := "增量部署"
+
+	if len(args) > 2 {
+		message = strings.Join(args[2:], " ")
+	}
+
+	// 检查目录是否存在
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		fmt.Printf("错误: 目录不存在: %s\n", dirPath)
+		os.Exit(1)
+	}
+
+	// 创建部署器
+	deployer := NewDeployer(apiBaseURL, name)
+
+	// 执行增量部署
+	if err := deployer.DeployIncremental(dirPath, message); err != nil {
+		fmt.Printf("部署失败: %v\n", err)
+		os.Exit(1)
+	}
 }

@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(chmod:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(ls:*)",
+      "Bash(bin/deploy-cli.exe:*)",
+      "Bash(test:*)",
+      "Bash(go:*)",
+      "Bash(export:*)",
+      "Bash(wails version:*)",
+      "Bash(./build-gui.sh:*)",
+      "Bash(./build-cli.sh:*)",
+      "Bash(./bin/deploy-cli help:*)"
     ]
   }
 }

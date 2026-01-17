@@ -1,6 +1,8 @@
 package server
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -63,25 +65,55 @@ func (s *DeployServer) Start() error {
 		return fmt.Errorf("创建web根目录失败: %v", err)
 	}
 
-	// 注册路由
-	http.HandleFunc("/api/sites", s.corsMiddleware(s.handleSites))
-	http.HandleFunc("/api/sites/create", s.corsMiddleware(s.handleCreateSite))
-	http.HandleFunc("/api/sites/delete", s.corsMiddleware(s.handleDeleteSite))
-	http.HandleFunc("/api/sites/deploy", s.corsMiddleware(s.handleDeploy))
-	http.HandleFunc("/api/sites/versions", s.corsMiddleware(s.handleVersions))
-	http.HandleFunc("/api/sites/rollback", s.corsMiddleware(s.handleRollback))
-	http.HandleFunc("/api/sites/list", s.corsMiddleware(s.handleListSites))
+	// 创建API路由
+	mux := http.NewServeMux()
+
+	// API路由
+	mux.HandleFunc("/api/sites", s.corsMiddleware(s.handleSites))
+	mux.HandleFunc("/api/sites/create", s.corsMiddleware(s.handleCreateSite))
+	mux.HandleFunc("/api/sites/delete", s.corsMiddleware(s.handleDeleteSite))
+	mux.HandleFunc("/api/sites/deploy", s.corsMiddleware(s.handleDeploy))
+	mux.HandleFunc("/api/sites/deploy-full", s.corsMiddleware(s.handleDeployFull)) // 全量部署
+	mux.HandleFunc("/api/sites/deploy-incremental", s.corsMiddleware(s.handleDeployIncremental)) // 增量部署
+	mux.HandleFunc("/api/sites/versions", s.corsMiddleware(s.handleVersions))
+	mux.HandleFunc("/api/sites/rollback", s.corsMiddleware(s.handleRollback))
+	mux.HandleFunc("/api/sites/list", s.corsMiddleware(s.handleListSites))
+
+	// 创建静态文件处理器
+	var staticHandler http.Handler
+	if s.config.Mode == "subdomain" {
+		staticHandler = NewStaticFileHandler(s.config.WebRoot, s.config.Mode, s.config.BaseDomain, s.config.SingleDomain)
+	} else {
+		staticHandler = &PathModeHandler{
+			StaticFileHandler: NewStaticFileHandler(s.config.WebRoot, s.config.Mode, s.config.BaseDomain, s.config.SingleDomain),
+		}
+	}
+
+	// 创建最终处理器
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// API请求使用mux处理
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			mux.ServeHTTP(w, r)
+			return
+		}
+
+		// 其他请求使用静态文件处理器
+		staticHandler.ServeHTTP(w, r)
+	})
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("服务器启动在 http://localhost%s\n", addr)
 	fmt.Printf("部署模式: %s\n", s.config.Mode)
 	if s.config.Mode == "subdomain" {
 		fmt.Printf("基础域名: %s\n", s.config.BaseDomain)
+		fmt.Printf("访问格式: http://site-name.%s\n", s.config.BaseDomain)
 	} else {
 		fmt.Printf("域名: %s\n", s.config.SingleDomain)
+		fmt.Printf("访问格式: http://%s/site-name\n", s.config.SingleDomain)
 	}
+	fmt.Printf("网站目录: %s\n", s.config.WebRoot)
 
-	return http.ListenAndServe(addr, nil)
+	return http.ListenAndServe(addr, handler)
 }
 
 // corsMiddleware CORS中间件
@@ -554,4 +586,193 @@ func (s *DeployServer) respondError(w http.ResponseWriter, message string, statu
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"error": message,
 	})
+}
+
+// handleDeployFull 全量部署
+func (s *DeployServer) handleDeployFull(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		s.respondError(w, "网站名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	message := r.FormValue("message")
+	if message == "" {
+		message = "全量部署"
+	}
+
+	// 获取上传的文件
+	file, _, err := r.FormFile("package")
+	if err != nil {
+		s.respondError(w, "获取部署包失败", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	sitePath := filepath.Join(s.config.WebRoot, name)
+	if _, err := os.Stat(sitePath); os.IsNotExist(err) {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 解压部署包
+	if err := s.extractPackage(file, sitePath); err != nil {
+		s.respondError(w, fmt.Sprintf("解压失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Git提交
+	if s.config.EnableVersioning {
+		if err := s.commitChanges(sitePath, message); err != nil {
+			fmt.Printf("Git提交失败: %v\n", err)
+		}
+	}
+
+	s.mu.Lock()
+	if site, exists := s.sites[name]; exists {
+		site.UpdatedAt = time.Now()
+	}
+	s.mu.Unlock()
+
+	s.respondJSON(w, map[string]interface{}{
+		"message": "全量部署成功",
+		"mode":    "full",
+	})
+}
+
+// handleDeployIncremental 增量部署
+func (s *DeployServer) handleDeployIncremental(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	name := r.FormValue("name")
+	if name == "" {
+		s.respondError(w, "网站名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	message := r.FormValue("message")
+	if message == "" {
+		message = "增量部署"
+	}
+
+	// 获取上传的文件
+	file, _, err := r.FormFile("package")
+	if err != nil {
+		s.respondError(w, "获取部署包失败", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	sitePath := filepath.Join(s.config.WebRoot, name)
+	if _, err := os.Stat(sitePath); os.IsNotExist(err) {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 解压增量包
+	if err := s.extractPackage(file, sitePath); err != nil {
+		s.respondError(w, fmt.Sprintf("解压失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Git提交
+	if s.config.EnableVersioning {
+		if err := s.commitChanges(sitePath, message); err != nil {
+			fmt.Printf("Git提交失败: %v\n", err)
+		}
+	}
+
+	s.mu.Lock()
+	if site, exists := s.sites[name]; exists {
+		site.UpdatedAt = time.Now()
+	}
+	s.mu.Unlock()
+
+	s.respondJSON(w, map[string]interface{}{
+		"message": "增量部署成功",
+		"mode":    "incremental",
+	})
+}
+
+// extractPackage 解压部署包
+func (s *DeployServer) extractPackage(packageFile io.Reader, destPath string) error {
+	// 创建gzip reader
+	gzReader, err := gzip.NewReader(packageFile)
+	if err != nil {
+		return fmt.Errorf("创建gzip reader失败: %v", err)
+	}
+	defer gzReader.Close()
+
+	// 创建tar reader
+	tarReader := tar.NewReader(gzReader)
+
+	// 遍历tar文件
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("读取tar条目失败: %v", err)
+		}
+
+		// 构建目标路径
+		targetPath := filepath.Join(destPath, header.Name)
+
+		// 检查路径安全
+		if !strings.HasPrefix(targetPath, destPath) {
+			return fmt.Errorf("非法路径: %s", header.Name)
+		}
+
+		// 根据文件类型处理
+		switch header.Typeflag {
+		case tar.TypeDir:
+			// 创建目录
+			if err := os.MkdirAll(targetPath, 0755); err != nil {
+				return fmt.Errorf("创建目录失败: %v", err)
+			}
+
+		case tar.TypeReg:
+			// 创建文件
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+				return fmt.Errorf("创建父目录失败: %v", err)
+			}
+
+			outFile, err := os.Create(targetPath)
+			if err != nil {
+				return fmt.Errorf("创建文件失败: %v", err)
+			}
+
+			if _, err := io.Copy(outFile, tarReader); err != nil {
+				outFile.Close()
+				return fmt.Errorf("写入文件失败: %v", err)
+			}
+			outFile.Close()
+
+		case tar.TypeSymlink:
+			// 忽略符号链接
+			continue
+		}
+	}
+
+	return nil
+}
+
+// FileHash 文件哈希信息
+type FileHash struct {
+	Path string `json:"path"`
+	Hash string `json:"hash"`
+}
+
+// FileHashList 文件哈希列表
+type FileHashList struct {
+	Files []FileHash `json:"files"`
 }
