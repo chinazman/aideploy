@@ -1,0 +1,40 @@
+# Git 相关
+.git
+.gitignore
+
+# 构建产物
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+server.exe
+
+# 客户端相关
+client/
+node_modules/
+
+# 测试和文档
+*.test
+*.out
+README.md
+docs/
+
+# IDE 相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统相关
+.DS_Store
+Thumbs.db
+
+# 日志和临时文件
+*.log
+tmp/
+temp/
+
+# 网站数据（不要打包进镜像）
+websites/

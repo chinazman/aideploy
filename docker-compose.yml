@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  deploy-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deploy-server
+    ports:
+      - "80:80"
+    volumes:
+      # 挂载配置文件目录
+      - ./bin/config.json:/app/config/config.json:ro
+      # 挂载网站目录
+      - ./bin/websites:/app/websites:rw
+      # 如果使用 git 版本控制，可以挂载 git 配置
+      # - ~/.gitconfig:/home/appuser/.gitconfig:ro
+    environment:
+      - CONFIG_PATH=/app/config/config.json
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/api/sites/list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - deploy-network
+
+networks:
+  deploy-network:
+    driver: bridge

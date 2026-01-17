@@ -1,0 +1,133 @@
+# GoReleaser 配置文件
+# 用于自动化构建和发布多平台二进制文件
+
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - '7'
+    ignore:
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    main: main.go
+    binary: deploy-server
+
+archives:
+  - format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - DOCKER.md
+      - bin/config.json
+      - docker-compose.yml
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^build:'
+      - '^chore:'
+  groups:
+    - title: '新功能'
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug 修复'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: '性能优化'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: '其他更改'
+      order: 999
+
+dockers:
+  - image_templates:
+      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:{{ .Version }}'
+      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:latest'
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/amd64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }} Docker Image
+      - --label=org.opencontainers.image.version={{ .Version }}
+      - --label=org.opencontainers.image.created={{ .Date }}
+      - --label=org.opencontainers.image.revision={{ .Commit }}
+      - --label=org.opencontainers.image.source={{ .GitURL }}
+    extra_files:
+      - bin/config.json
+
+  - image_templates:
+      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:{{ .Version }}-arm64'
+      - 'docker.io/{{ .Env.DOCKERHUB_USERNAME }}/aideploy:latest-arm64'
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - --platform=linux/arm64
+      - --label=org.opencontainers.image.title={{ .ProjectName }}
+      - --label=org.opencontainers.image.description={{ .ProjectName }} ARM64 Docker Image
+      - --label=org.opencontainers.image.version={{ .Version }}
+    extra_files:
+      - bin/config.json
+
+release:
+  draft: false
+  prerelease: auto
+  mode: replace
+  header: |
+    ## 🚀 Deploy Server {{ .Version }}
+  footer: |
+    ## 📦 使用方式
+
+    ### Docker (推荐)
+    ```bash
+    docker pull {{ .Env.DOCKERHUB_USERNAME }}/aideploy:{{ .Version }}
+    ```
+
+    ### 二进制文件
+    下载对应平台的二进制文件，解压后运行：
+    ```bash
+    ./deploy-server -config config.json
+    ```
+
+    ## 📝 更新日志
+    请查看下方的变更详情。
