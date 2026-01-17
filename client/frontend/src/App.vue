@@ -1,39 +1,19 @@
 <template>
   <div id="app">
-    <!-- 侧边导航栏 -->
-    <nav class="sidebar">
-      <div class="sidebar-header">
-        <h1>AI Deploy</h1>
-      </div>
-      <div class="nav-items">
-        <div
-          class="nav-item"
-          :class="{ active: currentView === 'sites' }"
-          @click="currentView = 'sites'"
-        >
-          <div class="nav-icon">🌐</div>
-          <div class="nav-text">网站管理</div>
-        </div>
-        <div
-          class="nav-item"
-          :class="{ active: currentView === 'config' }"
-          @click="currentView = 'config'"
-        >
-          <div class="nav-icon">⚙️</div>
-          <div class="nav-text">系统配置</div>
-        </div>
-      </div>
-    </nav>
-
     <!-- 主内容区 -->
     <main class="main-content">
       <!-- 网站管理视图 -->
       <div v-show="currentView === 'sites'" class="view-container">
         <div class="view-header">
           <h2>网站管理</h2>
-          <button @click="showCreateSiteModal = true" class="primary-btn">
-            + 新增网站
-          </button>
+          <div class="header-actions">
+            <button @click="showConfigModal = true" class="secondary-btn">
+              ⚙️ 系统设置
+            </button>
+            <button @click="showCreateSiteModal = true" class="primary-btn">
+              + 新增网站
+            </button>
+          </div>
         </div>
 
         <!-- 网站列表 -->
@@ -96,47 +76,60 @@
                   📁 绑定目录
                 </button>
                 <button @click="showVersions(site)" class="action-btn" title="版本历史">📜</button>
-                <button @click="deleteSite(site)" class="action-btn danger" title="删除">🗑️</button>
+                <button
+                  v-if="siteListTab === 'bound'"
+                  @click="unbindDirectory(site)"
+                  class="action-btn warning"
+                  title="解绑目录"
+                >
+                  🔓 解绑
+                </button>
+                <button
+                  v-else
+                  @click="deleteSite(site)"
+                  class="action-btn danger"
+                  title="删除"
+                >
+                  🗑️ 删除
+                </button>
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 配置视图 -->
-      <div v-show="currentView === 'config'" class="view-container">
-        <div class="view-header">
-          <h2>系统配置</h2>
-        </div>
-
-        <div class="tile-list">
-          <div class="tile">
-            <div class="tile-header">
-              <h3>服务器配置</h3>
-            </div>
-            <div class="tile-body">
-              <div class="input-group">
-                <label>服务器地址</label>
-                <input
-                  v-model="config.server_url"
-                  type="text"
-                  placeholder="http://localhost:8080/api"
-                />
-              </div>
-              <div class="input-group">
-                <label>API 密钥</label>
-                <input
-                  v-model="config.api_key"
-                  type="password"
-                  placeholder="可选"
-                />
-              </div>
-              <button @click="saveConfig" class="primary-btn">保存配置</button>
             </div>
           </div>
         </div>
       </div>
     </main>
+
+    <!-- 系统设置对话框 -->
+    <div v-if="showConfigModal" class="modal" @click.self="closeConfigModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>系统设置</h2>
+          <button @click="closeConfigModal" class="icon-btn">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>服务器地址</label>
+            <input
+              v-model="config.server_url"
+              type="text"
+              placeholder="http://localhost:8080/api"
+            />
+          </div>
+          <div class="input-group">
+            <label>API 密钥</label>
+            <input
+              v-model="config.api_key"
+              type="password"
+              placeholder="可选"
+            />
+          </div>
+          <div class="modal-actions">
+            <button @click="closeConfigModal" class="secondary-btn">取消</button>
+            <button @click="saveAndCloseConfig" class="primary-btn">保存配置</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 新增网站对话框 -->
     <div v-if="showCreateSiteModal" class="modal" @click.self="closeCreateSiteModal">
@@ -262,6 +255,7 @@ export default {
       showVersionsModal: false,
       showCreateSiteModal: false,
       showDeployModalFlag: false,
+      showConfigModal: false,
       message: '',
       messageType: 'info',
       siteListTab: 'bound',
@@ -303,6 +297,15 @@ export default {
       } catch (error) {
         this.showMessage('保存配置失败: ' + error, 'error')
       }
+    },
+
+    closeConfigModal() {
+      this.showConfigModal = false
+    },
+
+    async saveAndCloseConfig() {
+      await this.saveConfig()
+      this.showConfigModal = false
     },
 
     async loadSites() {
@@ -422,9 +425,24 @@ export default {
           this.selectedSite = ''
         }
         delete this.config.site_paths[site]
+        await this.saveConfig()
         await this.loadSites()
       } catch (error) {
         this.showMessage('删除失败: ' + error, 'error')
+      }
+    },
+
+    async unbindDirectory(site) {
+      if (!confirm(`确定要解绑网站 "${site}" 的目录吗？`)) {
+        return
+      }
+
+      try {
+        delete this.config.site_paths[site]
+        await this.saveConfig()
+        this.showMessage('目录解绑成功', 'success')
+      } catch (error) {
+        this.showMessage('解绑失败: ' + error, 'error')
       }
     },
 
@@ -487,61 +505,6 @@ export default {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* 侧边导航栏 */
-.sidebar {
-  width: 240px;
-  background: #1e1e1e;
-  color: white;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
-}
-
-.sidebar-header {
-  padding: 40px 20px 30px;
-  border-bottom: 1px solid #333;
-}
-
-.sidebar-header h1 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 300;
-  letter-spacing: 2px;
-}
-
-.nav-items {
-  flex: 1;
-  padding: 20px 0;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  padding: 15px 20px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border-left: 3px solid transparent;
-}
-
-.nav-item:hover {
-  background: #2d2d2d;
-}
-
-.nav-item.active {
-  background: #0078d7;
-  border-left-color: #fff;
-}
-
-.nav-icon {
-  font-size: 24px;
-  margin-right: 12px;
-}
-
-.nav-text {
-  font-size: 14px;
-  font-weight: 500;
-}
-
 /* 主内容区 */
 .main-content {
   flex: 1;
@@ -560,6 +523,11 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .view-header h2 {
@@ -732,6 +700,15 @@ button:disabled {
 
 .action-btn.danger:hover {
   background: #a52c00;
+}
+
+.action-btn.warning {
+  background: #ff8c00;
+  color: white;
+}
+
+.action-btn.warning:hover {
+  background: #e67400;
 }
 
 .action-btn.success {
