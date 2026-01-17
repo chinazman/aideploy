@@ -11,7 +11,6 @@ COPY go.sum* ./
 # 复制源代码
 COPY main.go ./
 COPY server/ ./server/
-COPY client/ ./client/
 
 # 构建应用
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
