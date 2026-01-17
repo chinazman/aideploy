@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKERHUB_USERNAME: your-dockerhub-username  # 替换为你的 Docker Hub 用户名
+  DOCKERHUB_USERNAME: chinazman  # 替换为你的 Docker Hub 用户名
 
 jobs:
   build:
