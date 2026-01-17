@@ -33,7 +33,6 @@ archives:
       - goos: windows
         format: zip
     files:
-      - LICENSE
       - README.md
       - DOCKER.md
       - bin/config.json
