@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -32,6 +33,7 @@ func (h *StaticFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 获取网站名称
 	siteName, err := h.extractSiteName(r.Host)
 	if err != nil {
+		log.Printf("[ERROR] Failed to extract site name from host=%s: %v", r.Host, err)
 		http.Error(w, "Website not found", http.StatusNotFound)
 		return
 	}
@@ -41,6 +43,7 @@ func (h *StaticFileHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 检查网站是否存在
 	if _, err := os.Stat(sitePath); os.IsNotExist(err) {
+		log.Printf("[ERROR] Site directory not found: %s", sitePath)
 		http.Error(w, "Website not found", http.StatusNotFound)
 		return
 	}
@@ -135,29 +138,38 @@ func (h *StaticFileHandler) serveFile(w http.ResponseWriter, r *http.Request, fi
 // extractSiteName 从请求中提取网站名称
 func (h *StaticFileHandler) extractSiteName(host string) (string, error) {
 	if h.mode == "subdomain" {
-		// 子域名模式: site.example.com -> site
+		// 移除端口号（如果存在）
+		hostParts := strings.Split(host, ":")
+		host = hostParts[0]
+
+		// 子域名模式
+		// 支持两种格式:
+		// 1. site.example.com -> site (二级域名)
+		// 2. site.tp.example.com -> site (三级域名)
 		parts := strings.Split(host, ".")
+
 		if len(parts) >= 2 {
 			// 检查是否匹配基础域名
-			// 例如: jydemo.localhost，基础域名是 localhost
-			// parts[len(parts)-1] 是最后一部分（顶级域名）
-			// 对于 localhost 这种单层域名，检查最后一部分
-			// 对于 example.com 这种多层域名，检查最后两部分
+			// 计算基础域名包含几个部分
+			baseDomainParts := strings.Split(h.baseDomain, ".")
+			baseDomainPartCount := len(baseDomainParts)
 
-			var actualDomain string
-			if len(parts) >= 3 {
-				// 多层域名: site.example.com
-				actualDomain = strings.Join(parts[len(parts)-2:], ".")
-			} else {
-				// 单层域名: site.localhost
-				actualDomain = parts[len(parts)-1]
+			if len(parts) < baseDomainPartCount + 1 {
+				return "", fmt.Errorf("host too short: host=%s, baseDomain=%s", host, h.baseDomain)
 			}
+
+			// 提取实际域名部分（从host中去除站点名部分）
+			// 例如: jydemo.tp.fornewtech.com，baseDomain是 tp.fornewtech.com
+			// 则实际域名应该是 parts[1:] = [tp, fornewtech, com] -> "tp.fornewtech.com"
+			actualDomain := strings.Join(parts[1:], ".")
 
 			if actualDomain == h.baseDomain {
-				return parts[0], nil
+				siteName := parts[0]
+				return siteName, nil
 			}
 		}
-		return "", fmt.Errorf("invalid subdomain")
+
+		return "", fmt.Errorf("invalid subdomain: host=%s, baseDomain=%s", host, h.baseDomain)
 	} else {
 		// 路径模式: example.com/site -> site
 		// 这个在 ServeHTTP 中通过 r.URL.Path 处理

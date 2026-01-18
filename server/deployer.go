@@ -105,15 +105,12 @@ func (s *DeployServer) Start() error {
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	fmt.Printf("服务器启动在 http://localhost%s\n", addr)
-	fmt.Printf("部署模式: %s\n", s.config.Mode)
+	fmt.Printf("部署模式: %s, 基础域名: %s\n", s.config.Mode, s.config.BaseDomain)
 	if s.config.Mode == "subdomain" {
-		fmt.Printf("基础域名: %s\n", s.config.BaseDomain)
 		fmt.Printf("访问格式: http://site-name.%s\n", s.config.BaseDomain)
 	} else {
-		fmt.Printf("域名: %s\n", s.config.SingleDomain)
 		fmt.Printf("访问格式: http://%s/site-name\n", s.config.SingleDomain)
 	}
-	fmt.Printf("网站目录: %s\n", s.config.WebRoot)
 
 	return http.ListenAndServe(addr, handler)
 }
