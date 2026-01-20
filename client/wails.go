@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -83,6 +85,38 @@ func (a *App) startup(ctx context.Context) {
 // shutdown 应用关闭时调用
 func (a *App) shutdown(ctx context.Context) {
 	// 清理资源
+}
+
+// SelectDirectory 选择目录
+func (a *App) SelectDirectory() (string, error) {
+	selection, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "选择网站目录",
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return selection, nil
+}
+
+// OpenDirectory 打开本地目录
+func (a *App) OpenDirectory(path string) error {
+	if path == "" {
+		return fmt.Errorf("目录路径不能为空")
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("explorer", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	default: // linux and others
+		cmd = exec.Command("xdg-open", path)
+	}
+
+	return cmd.Start()
 }
 
 // Website 网站信息
@@ -353,19 +387,6 @@ func (a *App) BindSiteDirectory(siteName, dirPath string) error {
 	a.config = config
 
 	return nil
-}
-
-// SelectDirectory 选择目录
-func (a *App) SelectDirectory() (string, error) {
-	selection, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
-		Title: "选择网站目录",
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return selection, nil
 }
 
 // FileChange 文件变更信息
