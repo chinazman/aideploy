@@ -19,7 +19,8 @@ import (
 // Deployer 部署器
 type Deployer struct {
 	serverURL   string
-	apiKey      string
+	username    string
+	password    string
 	siteName    string
 	trackingDir string // 跟踪文件目录
 }
@@ -45,16 +46,19 @@ func NewDeployer(serverURL, siteName string) *Deployer {
 	homeDir, _ := os.UserHomeDir()
 	trackingDir := filepath.Join(homeDir, ".aideploy", "tracking")
 
-	// 加载配置以获取API密钥
+	// 加载配置以获取用户名和密码
 	config, err := LoadConfig()
-	apiKey := ""
+	username := ""
+	password := ""
 	if err == nil {
-		apiKey = config.APIKey
+		username = config.Username
+		password = config.Password
 	}
 
 	return &Deployer{
 		serverURL:   serverURL,
-		apiKey:      apiKey,
+		username:    username,
+		password:    password,
 		siteName:    siteName,
 		trackingDir: trackingDir,
 	}
@@ -431,9 +435,10 @@ func (d *Deployer) uploadPackage(url, packagePath, message string) error {
 	// 设置Content-Type头
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// 如果配置了API密钥，添加到请求头
-	if d.apiKey != "" {
-		req.Header.Set("X-API-Key", d.apiKey)
+	// 添加认证信息
+	if d.username != "" && d.password != "" {
+		req.Header.Set("X-Username", d.username)
+		req.Header.Set("X-Password", d.password)
 	}
 
 	// 发送请求
@@ -519,9 +524,10 @@ func (d *Deployer) PullFromServer(sitePath string) error {
 		return fmt.Errorf("创建请求失败: %v", err)
 	}
 
-	// 添加API密钥
-	if d.apiKey != "" {
-		req.Header.Set("X-API-Key", d.apiKey)
+	// 添加认证信息
+	if d.username != "" && d.password != "" {
+		req.Header.Set("X-Username", d.username)
+		req.Header.Set("X-Password", d.password)
 	}
 
 	// 发送请求

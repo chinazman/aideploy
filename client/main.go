@@ -120,7 +120,8 @@ func printUsage() {
 	fmt.Println("  help                   显示帮助信息")
 	fmt.Println("\n示例:")
 	fmt.Println("  deploy-cli config set server http://192.168.1.100:8080/api")
-	fmt.Println("  deploy-cli config set api-key your-secret-key")
+	fmt.Println("  deploy-cli config set username admin")
+	fmt.Println("  deploy-cli config set password admin123")
 	fmt.Println("  deploy-cli config set site my-prototype ./dist")
 	fmt.Println("  deploy-cli config get")
 	fmt.Println("  deploy-cli create my-prototype")
@@ -638,13 +639,15 @@ func printConfigHelp() {
 	fmt.Println("  deploy-cli config <sub-command> [arguments]")
 	fmt.Println("\n子命令:")
 	fmt.Println("  set server <url>      设置服务器地址")
-	fmt.Println("  set api-key <key>     设置API密钥")
+	fmt.Println("  set username <name>   设置用户名")
+	fmt.Println("  set password <pwd>    设置密码")
 	fmt.Println("  set site <name> <dir> 设置网站发布目录")
 	fmt.Println("  get                   查看当前配置")
 	fmt.Println("  remove site <name>    移除网站发布目录")
 	fmt.Println("\n示例:")
 	fmt.Println("  deploy-cli config set server http://192.168.1.100:8080/api")
-	fmt.Println("  deploy-cli config set api-key my-secret-key")
+	fmt.Println("  deploy-cli config set username admin")
+	fmt.Println("  deploy-cli config set password admin123")
 	fmt.Println("  deploy-cli config set site my-prototype ./dist")
 	fmt.Println("  deploy-cli config set site my-project /path/to/dist")
 	fmt.Println("  deploy-cli config get")
@@ -655,7 +658,7 @@ func printConfigHelp() {
 func handleConfigSet(args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 缺少参数")
-		fmt.Println("用法: deploy-cli config set <server|api-key|site> <value>")
+		fmt.Println("用法: deploy-cli config set <server|username|password|site> <value>")
 		os.Exit(1)
 	}
 
@@ -667,7 +670,6 @@ func handleConfigSet(args []string) {
 		// 如果配置文件不存在，创建新的
 		config = &ClientConfig{
 			ServerURL: "http://localhost:8080/api",
-			APIKey:    "",
 			SitePaths: make(map[string]string),
 		}
 	}
@@ -687,18 +689,23 @@ func handleConfigSet(args []string) {
 		config.ServerURL = args[1]
 		fmt.Printf("✓ 服务器地址已设置为: %s\n", args[1])
 
-	case "api-key":
+	case "username":
 		if len(args) < 2 {
-			fmt.Println("错误: 请提供API密钥")
-			fmt.Println("用法: deploy-cli config set api-key <key>")
+			fmt.Println("错误: 请提供用户名")
+			fmt.Println("用法: deploy-cli config set username <name>")
 			os.Exit(1)
 		}
-		config.APIKey = args[1]
-		if args[1] == "" {
-			fmt.Println("✓ API密钥已清除（不使用密钥验证）")
-		} else {
-			fmt.Println("✓ API密钥已设置")
+		config.Username = args[1]
+		fmt.Printf("✓ 用户名已设置为: %s\n", args[1])
+
+	case "password":
+		if len(args) < 2 {
+			fmt.Println("错误: 请提供密码")
+			fmt.Println("用法: deploy-cli config set password <pwd>")
+			os.Exit(1)
 		}
+		config.Password = args[1]
+		fmt.Println("✓ 密码已设置")
 
 	case "site":
 		if len(args) < 3 {
@@ -734,7 +741,7 @@ func handleConfigSet(args []string) {
 
 	default:
 		fmt.Printf("错误: 未知的配置项 '%s'\n", key)
-		fmt.Println("支持的配置项: server, api-key, site")
+		fmt.Println("支持的配置项: server, username, password, site")
 		os.Exit(1)
 	}
 
@@ -805,16 +812,16 @@ func handleConfigGet() {
 	fmt.Println(strings.Repeat("-", 60))
 	fmt.Printf("服务器地址: %s\n", config.ServerURL)
 
-	if config.APIKey == "" {
-		fmt.Println("API密钥:    （未设置）")
+	if config.Username == "" {
+		fmt.Println("用户名:     （未设置）")
 	} else {
-		// 隐藏部分密钥用于显示
-		if len(config.APIKey) <= 8 {
-			fmt.Println("API密钥:    ********")
-		} else {
-			maskedKey := config.APIKey[:4] + "****" + config.APIKey[len(config.APIKey)-4:]
-			fmt.Printf("API密钥:    %s\n", maskedKey)
-		}
+		fmt.Printf("用户名:     %s\n", config.Username)
+	}
+
+	if config.Password == "" {
+		fmt.Println("密码:       （未设置）")
+	} else {
+		fmt.Println("密码:       ******")
 	}
 
 	// 显示网站目录配置

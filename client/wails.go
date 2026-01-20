@@ -369,7 +369,8 @@ func (a *App) SaveConfig(config *ClientConfig) error {
 	// 更新内存中的配置
 	a.config = config
 	a.apiBaseURL = config.ServerURL
-	a.apiKey = config.APIKey
+	a.username = config.Username
+	a.password = config.Password
 
 	// 保存到文件
 	if err := SaveConfig(config); err != nil {
