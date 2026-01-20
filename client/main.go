@@ -26,7 +26,8 @@ func main() {
 	}
 
 	apiBaseURL := config.ServerURL
-	apiKey := config.APIKey
+	username := config.Username
+	password := config.Password
 
 	args := flag.Args()
 	if len(args) < 1 {
@@ -40,23 +41,23 @@ func main() {
 	case "config":
 		handleConfig(args[1:])
 	case "create":
-		handleCreate(apiBaseURL, apiKey, args[1:])
+		handleCreate(apiBaseURL, username, password, args[1:])
 	case "delete":
-		handleDelete(apiBaseURL, apiKey, args[1:])
+		handleDelete(apiBaseURL, username, password, args[1:])
 	case "deploy":
-		handleDeploy(apiBaseURL, apiKey, config, args[1:])
+		handleDeploy(apiBaseURL, username, password, config, args[1:])
 	case "deploy-full":
-		handleDeployFull(apiBaseURL, apiKey, config, args[1:])
+		handleDeployFull(apiBaseURL, username, password, config, args[1:])
 	case "deploy-inc":
-		handleDeployIncremental(apiBaseURL, apiKey, config, args[1:])
+		handleDeployIncremental(apiBaseURL, username, password, config, args[1:])
 	case "list":
-		handleList(apiBaseURL, apiKey, args[1:])
+		handleList(apiBaseURL, username, password, args[1:])
 	case "versions":
-		handleVersions(apiBaseURL, apiKey, args[1:])
+		handleVersions(apiBaseURL, username, password, args[1:])
 	case "rollback":
-		handleRollback(apiBaseURL, apiKey, args[1:])
+		handleRollback(apiBaseURL, username, password, args[1:])
 	case "pull":
-		handlePull(apiBaseURL, apiKey, config, args[1:])
+		handlePull(apiBaseURL, username, password, config, args[1:])
 	case "help":
 		printUsage()
 	default:
@@ -66,35 +67,36 @@ func main() {
 	}
 }
 
-// addAPIKeyToRequest 如果配置了API密钥，则添加到请求头
-func addAPIKeyToRequest(req *http.Request, apiKey string) {
-	if apiKey != "" {
-		req.Header.Set("X-API-Key", apiKey)
+// addAuthToRequest 如果配置了用户名/密码，则添加到请求头
+func addAuthToRequest(req *http.Request, username, password string) {
+	if username != "" && password != "" {
+		req.Header.Set("X-Username", username)
+		req.Header.Set("X-Password", password)
 	}
 }
 
-// postJSON 发送POST请求（带JSON body和可选的API密钥）
-func postJSON(url string, body []byte, apiKey string) (*http.Response, error) {
+// postJSON 发送POST请求（带JSON body和可选的认证信息）
+func postJSON(url string, body []byte, username, password string) (*http.Response, error) {
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	addAPIKeyToRequest(req, apiKey)
+	addAuthToRequest(req, username, password)
 
 	client := &http.Client{}
 	return client.Do(req)
 }
 
-// getJSON 发送GET请求（带可选的API密钥）
-func getJSON(url string, apiKey string) (*http.Response, error) {
+// getJSON 发送GET请求（带可选的认证信息）
+func getJSON(url string, username, password string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	addAPIKeyToRequest(req, apiKey)
+	addAuthToRequest(req, username, password)
 
 	client := &http.Client{}
 	return client.Do(req)
@@ -130,7 +132,7 @@ func printUsage() {
 	fmt.Println("  deploy-cli pull my-prototype             # 从服务器覆盖本地")
 }
 
-func handleCreate(apiBaseURL, apiKey string, args []string) {
+func handleCreate(apiBaseURL, username, password string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 请提供网站名称")
 		fmt.Println("用法: deploy-cli create <name>")
@@ -149,7 +151,7 @@ func handleCreate(apiBaseURL, apiKey string, args []string) {
 		os.Exit(1)
 	}
 
-	resp, err := postJSON(apiBaseURL+"/sites/create", data, apiKey)
+	resp, err := postJSON(apiBaseURL+"/sites/create", data, username, password)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -178,7 +180,7 @@ func handleCreate(apiBaseURL, apiKey string, args []string) {
 	}
 }
 
-func handleDelete(apiBaseURL, apiKey string, args []string) {
+func handleDelete(apiBaseURL, username, password string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 请提供网站名称")
 		fmt.Println("用法: deploy-cli delete <name>")
@@ -207,7 +209,7 @@ func handleDelete(apiBaseURL, apiKey string, args []string) {
 		return
 	}
 
-	resp, err := postJSON(apiBaseURL+"/sites/delete", data, apiKey)
+	resp, err := postJSON(apiBaseURL+"/sites/delete", data, username, password)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -224,8 +226,8 @@ func handleDelete(apiBaseURL, apiKey string, args []string) {
 	fmt.Println("✓ 网站删除成功!")
 }
 
-func handleList(apiBaseURL, apiKey string, args []string) {
-	resp, err := getJSON(apiBaseURL+"/sites/list", apiKey)
+func handleList(apiBaseURL, username, password string, args []string) {
+	resp, err := getJSON(apiBaseURL+"/sites/list", username, password)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -261,7 +263,7 @@ func handleList(apiBaseURL, apiKey string, args []string) {
 	fmt.Println(strings.Repeat("-", 50))
 }
 
-func handleVersions(apiBaseURL, apiKey string, args []string) {
+func handleVersions(apiBaseURL, username, password string, args []string) {
 	if len(args) < 1 {
 		fmt.Println("错误: 请提供网站名称")
 		fmt.Println("用法: deploy-cli versions <name>")
@@ -271,7 +273,7 @@ func handleVersions(apiBaseURL, apiKey string, args []string) {
 	name := args[0]
 
 	url := fmt.Sprintf("%s/sites/versions?name=%s", apiBaseURL, name)
-	resp, err := getJSON(url, apiKey)
+	resp, err := getJSON(url, username, password)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -309,7 +311,7 @@ func handleVersions(apiBaseURL, apiKey string, args []string) {
 	fmt.Println(strings.Repeat("-", 80))
 }
 
-func handleRollback(apiBaseURL, apiKey string, args []string) {
+func handleRollback(apiBaseURL, username, password string, args []string) {
 	if len(args) < 2 {
 		fmt.Println("错误: 请提供网站名称和版本哈希")
 		fmt.Println("用法: deploy-cli rollback <name> <hash> [message]")
@@ -346,7 +348,7 @@ func handleRollback(apiBaseURL, apiKey string, args []string) {
 		return
 	}
 
-	resp, err := postJSON(apiBaseURL+"/sites/rollback", data, apiKey)
+	resp, err := postJSON(apiBaseURL+"/sites/rollback", data, username, password)
 	if err != nil {
 		fmt.Printf("错误: %v\n", err)
 		os.Exit(1)
@@ -364,7 +366,7 @@ func handleRollback(apiBaseURL, apiKey string, args []string) {
 }
 
 // handleDeploy 智能部署（自动选择增量或全量）
-func handleDeploy(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+func handleDeploy(apiBaseURL, username, password string, config *ClientConfig, args []string) {
 	var name, dirPath string
 	message := "更新部署"
 
@@ -475,7 +477,7 @@ func findMatchingSites(config *ClientConfig) []string {
 }
 
 // handleDeployFull 全量部署
-func handleDeployFull(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+func handleDeployFull(apiBaseURL, username, password string, config *ClientConfig, args []string) {
 	var name, dirPath string
 	message := "全量部署"
 
@@ -541,7 +543,7 @@ func handleDeployFull(apiBaseURL, apiKey string, config *ClientConfig, args []st
 }
 
 // handleDeployIncremental 增量部署
-func handleDeployIncremental(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+func handleDeployIncremental(apiBaseURL, username, password string, config *ClientConfig, args []string) {
 	var name, dirPath string
 	message := "增量部署"
 
@@ -835,7 +837,7 @@ func handleConfigGet() {
 }
 
 // handlePull 从服务器覆盖本地
-func handlePull(apiBaseURL, apiKey string, config *ClientConfig, args []string) {
+func handlePull(apiBaseURL, username, password string, config *ClientConfig, args []string) {
 	var name, dirPath string
 
 	// 如果没有提供网站名称，尝试根据当前目录自动匹配

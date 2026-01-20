@@ -167,11 +167,19 @@
             />
           </div>
           <div class="input-group">
-            <label>API 密钥</label>
+            <label>用户名</label>
             <input
-              v-model="config.api_key"
+              v-model="config.username"
+              type="text"
+              placeholder="请输入用户名"
+            />
+          </div>
+          <div class="input-group">
+            <label>密码</label>
+            <input
+              v-model="config.password"
               type="password"
-              placeholder="可选"
+              placeholder="请输入密码"
             />
           </div>
           <div class="modal-actions">
@@ -402,7 +410,8 @@ export default {
       siteListTab: 'bound',
       config: {
         server_url: 'http://localhost:8080/api',
-        api_key: '',
+        username: '',
+        password: '',
         site_paths: {}
       }
     }

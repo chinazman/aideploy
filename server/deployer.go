@@ -3,6 +3,7 @@ package server
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,15 +16,37 @@ import (
 	"time"
 )
 
+// 上下文键类型
+type contextKey string
+
+const userContextKey contextKey = "user"
+
 // Config 服务器配置
 type Config struct {
-	BaseDomain       string `json:"base_domain"`       // 基础域名（子域名模式）
-	WebRoot          string `json:"web_root"`          // 网站根目录
-	Mode             string `json:"mode"`              // 部署模式：subdomain 或 path
-	SingleDomain     string `json:"single_domain"`     // 单域名模式下的域名
-	Port             int    `json:"port"`              // 服务器端口
-	EnableVersioning bool   `json:"enable_versioning"` // 是否启用版本控制
-	APIKey           string `json:"api_key"`           // API密钥（可选，为空则不验证）
+	BaseDomain       string            `json:"base_domain"`       // 基础域名（子域名模式）
+	WebRoot          string            `json:"web_root"`          // 网站根目录
+	Mode             string            `json:"mode"`              // 部署模式：subdomain 或 path
+	SingleDomain     string            `json:"single_domain"`     // 单域名模式下的域名
+	Port             int               `json:"port"`              // 服务器端口
+	EnableVersioning bool              `json:"enable_versioning"` // 是否启用版本控制
+	APIKey           string            `json:"api_key,omitempty"` // API密钥（已弃用，保留兼容）
+	Sites            map[string]Site   `json:"sites"`             // 网站配置
+	Users            map[string]User   `json:"users"`             // 用户配置
+}
+
+// Site 网站配置
+type Site struct {
+	Name string   `json:"name"` // 网站名称
+	Desc string   `json:"desc"` // 网站描述
+	Owner string   `json:"owner"` // 所有者
+	Users []string `json:"users"` // 授权用户列表
+}
+
+// User 用户配置
+type User struct {
+	Name     string `json:"name"`     // 用户名
+	Password string `json:"pass"`     // 密码
+	IsAdmin  bool   `json:"isAdmin"` // 是否是管理员
 }
 
 // Website 网站信息
@@ -46,16 +69,101 @@ type Version struct {
 
 // DeployServer 部署服务器
 type DeployServer struct {
-	config Config
-	sites  map[string]*Website
-	mu     sync.RWMutex
+	config         Config
+	sites          map[string]*Website
+	mu             sync.RWMutex
+	configPath     string // 配置文件路径
 }
 
 // NewDeployServer 创建新的部署服务器
-func NewDeployServer(config Config) *DeployServer {
+func NewDeployServer(config Config, configPath string) *DeployServer {
 	return &DeployServer{
-		config: config,
-		sites:  make(map[string]*Website),
+		config:     config,
+		sites:      make(map[string]*Website),
+		configPath: configPath,
+	}
+}
+
+// saveConfig 保存配置到文件
+func (s *DeployServer) saveConfig() error {
+	data, err := json.MarshalIndent(s.config, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(s.configPath, data, 0644)
+}
+
+// authenticate 用户认证
+func (s *DeployServer) authenticate(username, password string) (*User, error) {
+	user, exists := s.config.Users[username]
+	if !exists {
+		return nil, fmt.Errorf("用户不存在")
+	}
+
+	if user.Password != password {
+		return nil, fmt.Errorf("密码错误")
+	}
+
+	return &user, nil
+}
+
+// canAccessSite 检查用户是否有权限访问网站
+func (s *DeployServer) canAccessSite(siteName, username string) bool {
+	site, exists := s.config.Sites[siteName]
+	if !exists {
+		return false
+	}
+
+	// 检查是否是所有者
+	if site.Owner == username {
+		return true
+	}
+
+	// 检查是否在授权用户列表中
+	for _, u := range site.Users {
+		if u == username {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isSiteOwner 检查用户是否是网站的所有者
+func (s *DeployServer) isSiteOwner(siteName, username string) bool {
+	site, exists := s.config.Sites[siteName]
+	if !exists {
+		return false
+	}
+	return site.Owner == username
+}
+
+// contextWithUser 将用户信息添加到上下文
+func contextWithUser(ctx context.Context, user *User) context.Context {
+	return context.WithValue(ctx, userContextKey, user)
+}
+
+// userFromContext 从上下文中获取用户信息
+func userFromContext(ctx context.Context) *User {
+	if user, ok := ctx.Value(userContextKey).(*User); ok {
+		return user
+	}
+	return nil
+}
+
+// requireAdmin 要求管理员权限的中间件
+func (s *DeployServer) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := userFromContext(r.Context())
+		if user == nil || !user.IsAdmin {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "需要管理员权限",
+			})
+			return
+		}
+		next(w, r)
 	}
 }
 
@@ -80,6 +188,16 @@ func (s *DeployServer) Start() error {
 	mux.HandleFunc("/api/sites/rollback", s.corsMiddleware(s.authMiddleware(s.handleRollback)))
 	mux.HandleFunc("/api/sites/list", s.corsMiddleware(s.authMiddleware(s.handleListSites)))
 	mux.HandleFunc("/api/sites/export", s.corsMiddleware(s.authMiddleware(s.handleExport)))
+
+	// 用户管理路由（需要管理员权限）
+	mux.HandleFunc("/api/users/list", s.corsMiddleware(s.authMiddleware(s.requireAdmin(s.handleListUsers))))
+	mux.HandleFunc("/api/users/create", s.corsMiddleware(s.authMiddleware(s.requireAdmin(s.handleCreateUser))))
+	mux.HandleFunc("/api/users/update", s.corsMiddleware(s.authMiddleware(s.requireAdmin(s.handleUpdateUser))))
+	mux.HandleFunc("/api/users/delete", s.corsMiddleware(s.authMiddleware(s.requireAdmin(s.handleDeleteUser))))
+
+	// 网站授权路由
+	mux.HandleFunc("/api/sites/authorize", s.corsMiddleware(s.authMiddleware(s.handleAuthorizeSite)))
+	mux.HandleFunc("/api/sites/unauthorize", s.corsMiddleware(s.authMiddleware(s.handleUnauthorizeSite)))
 
 	// 创建静态文件处理器
 	var staticHandler http.Handler
@@ -120,7 +238,7 @@ func (s *DeployServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Username, X-Password")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -131,15 +249,57 @@ func (s *DeployServer) corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// authMiddleware API密钥验证中间件
+// getUserFromRequest 从请求中获取用户信息
+func (s *DeployServer) getUserFromRequest(r *http.Request) (*User, error) {
+	// 优先使用新的用户名/密码认证
+	username := r.Header.Get("X-Username")
+	password := r.Header.Get("X-Password")
+
+	if username != "" && password != "" {
+		return s.authenticate(username, password)
+	}
+
+	// 兼容旧的 API Key 认证
+	if s.config.APIKey != "" {
+		providedKey := r.Header.Get("X-API-Key")
+		if providedKey == s.config.APIKey {
+			// API Key 认证通过，返回管理员权限
+			return &User{
+				Name:    "admin",
+				IsAdmin: true,
+			}, nil
+		}
+		return nil, fmt.Errorf("无效的API密钥")
+	}
+
+	// 如果都没有配置，返回错误
+	return nil, fmt.Errorf("未提供认证信息")
+}
+
+// authMiddleware 用户认证中间件
 func (s *DeployServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// 如果配置了API密钥，则进行验证
-		if s.config.APIKey != "" {
-			// 从请求头获取API密钥
-			providedKey := r.Header.Get("X-API-Key")
+		// 如果配置了用户系统，使用用户认证
+		if len(s.config.Users) > 0 {
+			user, err := s.getUserFromRequest(r)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				json.NewEncoder(w).Encode(map[string]string{
+					"error": "未授权：" + err.Error(),
+				})
+				return
+			}
 
-			// 验证密钥
+			// 将用户信息存储到请求上下文中
+			ctx := contextWithUser(r.Context(), user)
+			next(w, r.WithContext(ctx))
+			return
+		}
+
+		// 兼容旧的 API Key 认证
+		if s.config.APIKey != "" {
+			providedKey := r.Header.Get("X-API-Key")
 			if providedKey != s.config.APIKey {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
@@ -150,7 +310,7 @@ func (s *DeployServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
-		// 如果没有配置API密钥或密钥验证通过，继续处理请求
+		// 如果没有配置认证，继续处理请求
 		next(w, r)
 	}
 }
@@ -186,6 +346,9 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 获取当前用户
+	user := userFromContext(r.Context())
+
 	// 获取请求的协议和主机
 	scheme := "http"
 	if r.TLS != nil {
@@ -203,6 +366,15 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 	for _, entry := range entries {
 		if entry.IsDir() {
 			siteName := entry.Name()
+
+			// 如果配置了用户系统，进行权限过滤
+			if user != nil {
+				// 检查用户是否有权限访问此网站
+				if !s.canAccessSite(siteName, user.Name) {
+					continue
+				}
+			}
+
 			var siteURL string
 
 			// 根据模式生成 URL
@@ -952,4 +1124,315 @@ func (s *DeployServer) handleExport(w http.ResponseWriter, r *http.Request) {
 		// 如果出错，尝试写入错误信息（可能已经写入了一些数据）
 		fmt.Printf("导出文件失败: %v\n", err)
 	}
+}
+
+// handleListUsers 列出所有用户（管理员）
+func (s *DeployServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	users := make([]User, 0, len(s.config.Users))
+	for _, user := range s.config.Users {
+		users = append(users, User{
+			Name:    user.Name,
+			IsAdmin: user.IsAdmin,
+			// 不返回密码
+		})
+	}
+
+	s.respondJSON(w, map[string]interface{}{
+		"users": users,
+	})
+}
+
+// handleCreateUser 创建用户（管理员）
+func (s *DeployServer) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name     string `json:"name"`
+		Password string `json:"password"`
+		IsAdmin  bool   `json:"isAdmin"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || req.Password == "" {
+		s.respondError(w, "用户名和密码不能为空", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.config.Users[req.Name]; exists {
+		s.respondError(w, "用户已存在", http.StatusConflict)
+		return
+	}
+
+	// 创建用户
+	s.config.Users[req.Name] = User{
+		Name:     req.Name,
+		Password: req.Password,
+		IsAdmin:  req.IsAdmin,
+	}
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, "保存配置失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.respondJSON(w, map[string]string{
+		"message": "用户创建成功",
+		"name":    req.Name,
+	})
+}
+
+// handleUpdateUser 更新用户（管理员）
+func (s *DeployServer) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name     string `json:"name"`
+		Password string `json:"password,omitempty"`
+		IsAdmin  *bool  `json:"isAdmin,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		s.respondError(w, "用户名不能为空", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	user, exists := s.config.Users[req.Name]
+	if !exists {
+		s.respondError(w, "用户不存在", http.StatusNotFound)
+		return
+	}
+
+	// 更新密码
+	if req.Password != "" {
+		user.Password = req.Password
+	}
+
+	// 更新管理员权限
+	if req.IsAdmin != nil {
+		user.IsAdmin = *req.IsAdmin
+	}
+
+	s.config.Users[req.Name] = user
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, "保存配置失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.respondJSON(w, map[string]string{
+		"message": "用户更新成功",
+		"name":    req.Name,
+	})
+}
+
+// handleDeleteUser 删除用户（管理员）
+func (s *DeployServer) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		s.respondError(w, "用户名不能为空", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.config.Users[req.Name]; !exists {
+		s.respondError(w, "用户不存在", http.StatusNotFound)
+		return
+	}
+
+	delete(s.config.Users, req.Name)
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, "保存配置失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.respondJSON(w, map[string]string{
+		"message": "用户删除成功",
+		"name":    req.Name,
+	})
+}
+
+// handleAuthorizeSite 授权网站给用户（owner）
+func (s *DeployServer) handleAuthorizeSite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user := userFromContext(r.Context())
+	if user == nil {
+		s.respondError(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		SiteName  string   `json:"siteName"`
+		Username  string   `json:"username"`
+		Usernames []string `json:"usernames"` // 批量授权
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	site, exists := s.config.Sites[req.SiteName]
+	if !exists {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 检查是否是 owner 或管理员
+	if site.Owner != user.Name && !user.IsAdmin {
+		s.respondError(w, "只有网站所有者或管理员可以授权", http.StatusForbidden)
+		return
+	}
+
+	// 获取要授权的用户列表
+	usersToAuthorize := req.Usernames
+	if req.Username != "" {
+		usersToAuthorize = append(usersToAuthorize, req.Username)
+	}
+
+	// 授权用户
+	for _, username := range usersToAuthorize {
+		// 检查用户是否存在
+		if _, exists := s.config.Users[username]; !exists {
+			continue
+		}
+
+		// 检查是否已授权
+		alreadyAuthorized := false
+		for _, u := range site.Users {
+			if u == username {
+				alreadyAuthorized = true
+				break
+			}
+		}
+
+		if !alreadyAuthorized {
+			site.Users = append(site.Users, username)
+		}
+	}
+
+	s.config.Sites[req.SiteName] = site
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, "保存配置失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.respondJSON(w, map[string]interface{}{
+		"message": "授权成功",
+		"site":    site,
+	})
+}
+
+// handleUnauthorizeSite 取消网站授权（owner）
+func (s *DeployServer) handleUnauthorizeSite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	user := userFromContext(r.Context())
+	if user == nil {
+		s.respondError(w, "未授权", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		SiteName string `json:"siteName"`
+		Username string `json:"username"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	site, exists := s.config.Sites[req.SiteName]
+	if !exists {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 检查是否是 owner 或管理员
+	if site.Owner != user.Name && !user.IsAdmin {
+		s.respondError(w, "只有网站所有者或管理员可以取消授权", http.StatusForbidden)
+		return
+	}
+
+	// 移除用户授权
+	newUsers := make([]string, 0)
+	for _, u := range site.Users {
+		if u != req.Username {
+			newUsers = append(newUsers, u)
+		}
+	}
+	site.Users = newUsers
+
+	s.config.Sites[req.SiteName] = site
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, "保存配置失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	s.respondJSON(w, map[string]interface{}{
+		"message": "取消授权成功",
+		"site":    site,
+	})
 }

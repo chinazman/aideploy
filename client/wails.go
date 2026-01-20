@@ -51,27 +51,31 @@ func main() {
 type App struct {
 	ctx        context.Context
 	apiBaseURL string
-	apiKey     string
+	username   string
+	password   string
 	config     *ClientConfig
 }
 
 // NewApp 创建应用实例
 func NewApp() *App {
-	// 从配置文件加载服务端地址和API密钥
+	// 从配置文件加载服务端地址和用户名/密码
 	config, err := LoadConfig()
 	apiBaseURL := "http://localhost:8080/api"
-	apiKey := ""
+	username := ""
+	password := ""
 
 	if err == nil {
 		if config.ServerURL != "" {
 			apiBaseURL = config.ServerURL
 		}
-		apiKey = config.APIKey
+		username = config.Username
+		password = config.Password
 	}
 
 	return &App{
 		apiBaseURL: apiBaseURL,
-		apiKey:     apiKey,
+		username:   username,
+		password:   password,
 		config:     config,
 	}
 }
@@ -137,10 +141,12 @@ type Version struct {
 	Date    string `json:"date"`
 }
 
-// addAPIKeyToRequest 如果配置了API密钥，则添加到请求头
-func (a *App) addAPIKeyToRequest(req *http.Request) {
-	if a.apiKey != "" {
-		req.Header.Set("X-API-Key", a.apiKey)
+// addAuthToRequest 添加认证信息到请求头
+func (a *App) addAuthToRequest(req *http.Request) {
+	// 优先使用用户名/密码认证
+	if a.username != "" && a.password != "" {
+		req.Header.Set("X-Username", a.username)
+		req.Header.Set("X-Password", a.password)
 	}
 }
 
@@ -157,7 +163,7 @@ func (a *App) CreateSite(name string) (*Website, error) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	a.addAPIKeyToRequest(req)
+	a.addAuthToRequest(req)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -193,7 +199,7 @@ func (a *App) DeleteSite(name string) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	a.addAPIKeyToRequest(req)
+	a.addAuthToRequest(req)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -242,7 +248,7 @@ func (a *App) ListSites() ([]SiteInfo, error) {
 		return nil, err
 	}
 
-	a.addAPIKeyToRequest(req)
+	a.addAuthToRequest(req)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -290,7 +296,7 @@ func (a *App) GetVersions(name string) ([]Version, error) {
 		return nil, err
 	}
 
-	a.addAPIKeyToRequest(req)
+	a.addAuthToRequest(req)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -332,7 +338,7 @@ func (a *App) Rollback(name, hash, message string) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	a.addAPIKeyToRequest(req)
+	a.addAuthToRequest(req)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

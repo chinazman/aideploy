@@ -35,7 +35,7 @@ func main() {
 	}
 
 	// 创建并启动服务器
-	srv := server.NewDeployServer(config)
+	srv := server.NewDeployServer(config, *configPath)
 	if err := srv.Start(); err != nil {
 		fmt.Printf("服务器启动失败: %v\n", err)
 		os.Exit(1)
@@ -44,13 +44,15 @@ func main() {
 
 // Config 配置结构（临时定义，用于加载）
 type Config struct {
-	BaseDomain       string `json:"base_domain"`
-	WebRoot          string `json:"web_root"`
-	Mode             string `json:"mode"`
-	SingleDomain     string `json:"single_domain"`
-	Port             int    `json:"port"`
-	EnableVersioning bool   `json:"enable_versioning"`
-	APIKey           string `json:"api_key"`
+	BaseDomain       string                 `json:"base_domain"`
+	WebRoot          string                 `json:"web_root"`
+	Mode             string                 `json:"mode"`
+	SingleDomain     string                 `json:"single_domain"`
+	Port             int                    `json:"port"`
+	EnableVersioning bool                   `json:"enable_versioning"`
+	APIKey           string                 `json:"api_key,omitempty"`
+	Sites            map[string]server.Site `json:"sites"`
+	Users            map[string]server.User `json:"users"`
 }
 
 // loadConfig 加载配置文件
@@ -65,6 +67,14 @@ func loadConfig(path string) (server.Config, error) {
 		return server.Config{}, err
 	}
 
+	// 初始化空的 maps
+	if cfg.Sites == nil {
+		cfg.Sites = make(map[string]server.Site)
+	}
+	if cfg.Users == nil {
+		cfg.Users = make(map[string]server.User)
+	}
+
 	return server.Config{
 		BaseDomain:       cfg.BaseDomain,
 		WebRoot:          cfg.WebRoot,
@@ -73,6 +83,8 @@ func loadConfig(path string) (server.Config, error) {
 		Port:             cfg.Port,
 		EnableVersioning: cfg.EnableVersioning,
 		APIKey:           cfg.APIKey,
+		Sites:            cfg.Sites,
+		Users:            cfg.Users,
 	}, nil
 }
 
@@ -86,14 +98,25 @@ func createDefaultConfig(path string) error {
 
 	webRoot := filepath.Join(wd, "websites")
 
+	// 创建默认管理员用户
+	defaultUsers := map[string]server.User{
+		"admin": {
+			Name:     "admin",
+			Password: "admin123",
+			IsAdmin:  true,
+		},
+	}
+
 	cfg := Config{
-		BaseDomain:       "example.com",
+		BaseDomain:       "localhost",
 		WebRoot:          webRoot,
-		Mode:             "subdomain",
+		Mode:             "path",
 		SingleDomain:     "",
 		Port:             8080,
 		EnableVersioning: true,
-		APIKey:           "", // 留空则不验证API密钥
+		APIKey:           "",
+		Sites:            make(map[string]server.Site),
+		Users:            defaultUsers,
 	}
 
 	data, err := json.MarshalIndent(cfg, "", "  ")

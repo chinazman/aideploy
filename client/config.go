@@ -10,7 +10,8 @@ import (
 // ClientConfig 客户端配置
 type ClientConfig struct {
 	ServerURL  string            `json:"server_url"`
-	APIKey     string            `json:"api_key"`
+	Username   string            `json:"username"`
+	Password   string            `json:"password"`
 	SitePaths  map[string]string `json:"site_paths"` // 网站名称 -> 本地发布目录映射
 }
 
