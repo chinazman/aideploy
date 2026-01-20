@@ -54,19 +54,19 @@
           <div v-else class="list-items">
             <div
               v-for="site in filteredSites"
-              :key="site"
+              :key="site.name"
               class="list-item"
             >
-              <div class="item-main">
+              <div class="item-main" @click="openSiteInBrowser(site.url)">
                 <div class="item-icon">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S12 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S7.5 3 12 3m0-18a9 9 0 018.716 6.747M12 3a9 9 0 00-8.716 6.747M12 3c2.485 0 4.5 4.03 4.5 9s-2.015 9-4.5 9m0-18c-2.485 0-4.5 4.03-4.5 9s2.015 9 4.5 9" />
                   </svg>
                 </div>
                 <div class="item-content">
-                  <div class="item-title">{{ site }}</div>
-                  <div class="item-subtitle" v-if="config.site_paths && config.site_paths[site]">
-                    {{ config.site_paths[site] }}
+                  <div class="item-title">{{ site.name }}</div>
+                  <div class="item-subtitle" v-if="config.site_paths && config.site_paths[site.name]">
+                    {{ config.site_paths[site.name] }}
                   </div>
                   <div class="item-subtitle" v-else>
                     未绑定目录
@@ -75,8 +75,8 @@
               </div>
               <div class="item-actions">
                 <button
-                  v-if="config.site_paths && config.site_paths[site]"
-                  @click="openDirectory(config.site_paths[site])"
+                  v-if="config.site_paths && config.site_paths[site.name]"
+                  @click="openDirectory(config.site_paths[site.name])"
                   class="action-btn"
                   title="打开目录"
                 >
@@ -85,8 +85,8 @@
                   </svg>
                 </button>
                 <button
-                  v-if="config.site_paths && config.site_paths[site]"
-                  @click="showDeployModal(site)"
+                  v-if="config.site_paths && config.site_paths[site.name]"
+                  @click="showDeployModal(site.name)"
                   class="action-btn success"
                   title="发布"
                 >
@@ -96,7 +96,7 @@
                 </button>
                 <button
                   v-else
-                  @click="bindDirectory(site)"
+                  @click="bindDirectory(site.name)"
                   class="action-btn"
                   title="绑定目录"
                 >
@@ -105,8 +105,8 @@
                   </svg>
                 </button>
                 <button
-                  v-if="config.site_paths && config.site_paths[site]"
-                  @click="pullFromServer(site)"
+                  v-if="config.site_paths && config.site_paths[site.name]"
+                  @click="pullFromServer(site.name)"
                   class="action-btn info"
                   title="从服务器覆盖本地"
                 >
@@ -114,14 +114,14 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                   </svg>
                 </button>
-                <button @click="showVersions(site)" class="action-btn" title="版本历史">
+                <button @click="showVersions(site.name)" class="action-btn" title="版本历史">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </button>
                 <button
                   v-if="siteListTab === 'bound'"
-                  @click="unbindDirectory(site)"
+                  @click="unbindDirectory(site.name)"
                   class="action-btn warning"
                   title="解绑目录"
                 >
@@ -131,7 +131,7 @@
                 </button>
                 <button
                   v-else
-                  @click="deleteSite(site)"
+                  @click="deleteSite(site.name)"
                   class="action-btn danger"
                   title="删除"
                 >
@@ -383,7 +383,7 @@ export default {
   data() {
     return {
       currentView: 'sites',
-      sites: [],
+      sites: [], // 改为存储网站对象数组 {name, url}
       newSiteName: '',
       newSitePath: '',
       selectedSite: '',
@@ -411,7 +411,7 @@ export default {
     filteredSites() {
       if (this.siteListTab === 'bound') {
         return this.sites.filter(site =>
-          this.config.site_paths && this.config.site_paths[site]
+          this.config.site_paths && this.config.site_paths[site.name]
         )
       }
       return this.sites
@@ -678,6 +678,11 @@ export default {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
     },
 
+    openSiteInBrowser(url) {
+      // 在浏览器中打开网站
+      window.open(url, '_blank')
+    },
+
     showMessage(msg, type = 'info') {
       this.message = msg
       this.messageType = type
@@ -813,6 +818,14 @@ export default {
   align-items: center;
   flex: 1;
   cursor: pointer;
+  border-radius: 8px;
+  padding: 8px;
+  margin-right: 8px;
+  transition: background 0.2s ease;
+}
+
+.item-main:hover {
+  background: rgba(56, 189, 248, 0.1);
 }
 
 .item-icon {

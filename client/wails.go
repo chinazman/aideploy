@@ -229,8 +229,14 @@ func (a *App) DeploySite(name, message string) error {
 	return nil
 }
 
+// SiteInfo 网站信息
+type SiteInfo struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
 // ListSites 列出所有网站
-func (a *App) ListSites() ([]string, error) {
+func (a *App) ListSites() ([]SiteInfo, error) {
 	req, err := http.NewRequest("GET", a.apiBaseURL+"/sites/list", nil)
 	if err != nil {
 		return nil, err
@@ -258,13 +264,18 @@ func (a *App) ListSites() ([]string, error) {
 
 	sites, ok := result["sites"].([]interface{})
 	if !ok {
-		return []string{}, nil
+		return []SiteInfo{}, nil
 	}
 
-	siteList := make([]string, len(sites))
-	for i, site := range sites {
-		if siteName, ok := site.(string); ok {
-			siteList[i] = siteName
+	siteList := make([]SiteInfo, 0, len(sites))
+	for _, site := range sites {
+		if siteMap, ok := site.(map[string]interface{}); ok {
+			name, _ := siteMap["name"].(string)
+			url, _ := siteMap["url"].(string)
+			siteList = append(siteList, SiteInfo{
+				Name: name,
+				URL:  url,
+			})
 		}
 	}
 

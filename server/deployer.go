@@ -186,10 +186,42 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sites := []string{}
+	// 获取请求的协议和主机
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	host := r.Host
+
+	// 构建网站信息列表
+	type SiteInfo struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	}
+
+	sites := []SiteInfo{}
 	for _, entry := range entries {
 		if entry.IsDir() {
-			sites = append(sites, entry.Name())
+			siteName := entry.Name()
+			var siteURL string
+
+			// 根据模式生成 URL
+			if s.config.Mode == "subdomain" {
+				// 子域名模式: siteName.baseDomain
+				siteURL = fmt.Sprintf("%s://%s.%s", scheme, siteName, s.config.BaseDomain)
+				// 如果有端口，添加端口
+				if s.config.Port != 80 && s.config.Port != 443 {
+					siteURL = fmt.Sprintf("%s:%d", siteURL, s.config.Port)
+				}
+			} else {
+				// 路径模式: host/siteName
+				siteURL = fmt.Sprintf("%s://%s/%s", scheme, host, siteName)
+			}
+
+			sites = append(sites, SiteInfo{
+				Name: siteName,
+				URL:  siteURL,
+			})
 		}
 	}
 
