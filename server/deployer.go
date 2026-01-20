@@ -77,11 +77,14 @@ type DeployServer struct {
 
 // NewDeployServer 创建新的部署服务器
 func NewDeployServer(config Config, configPath string) *DeployServer {
-	return &DeployServer{
+	s := &DeployServer{
 		config:     config,
 		sites:      make(map[string]*Website),
 		configPath: configPath,
 	}
+	// 从配置文件加载网站信息
+	s.reloadSitesFromConfig()
+	return s
 }
 
 // saveConfig 保存配置到文件
@@ -91,6 +94,43 @@ func (s *DeployServer) saveConfig() error {
 		return err
 	}
 	return os.WriteFile(s.configPath, data, 0644)
+}
+
+// reloadSitesFromConfig 从配置重新加载网站信息到内存
+func (s *DeployServer) reloadSitesFromConfig() {
+	// 清空现有的内存缓存
+	s.sites = make(map[string]*Website)
+
+	// 从配置中重新加载
+	for name := range s.config.Sites {
+		sitePath := filepath.Join(s.config.WebRoot, name)
+
+		var domain string
+		if s.config.Mode == "subdomain" {
+			domain = fmt.Sprintf("%s.%s", name, s.config.BaseDomain)
+		} else {
+			domain = fmt.Sprintf("%s/%s", s.config.SingleDomain, name)
+		}
+
+		// 尝试读取文件信息获取时间戳
+		var created, updated time.Time
+		if info, err := os.Stat(sitePath); err == nil {
+			created = info.ModTime()
+			updated = info.ModTime()
+		} else {
+			created = time.Now()
+			updated = time.Now()
+		}
+
+		s.sites[name] = &Website{
+			ID:        name,
+			Name:      name,
+			Domain:    domain,
+			Path:      sitePath,
+			CreatedAt: created,
+			UpdatedAt: updated,
+		}
+	}
 }
 
 // authenticate 用户认证
@@ -411,6 +451,7 @@ func (s *DeployServer) handleCreateSite(w http.ResponseWriter, r *http.Request) 
 
 	var req struct {
 		Name string `json:"name"`
+		Desc string `json:"desc"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -420,6 +461,13 @@ func (s *DeployServer) handleCreateSite(w http.ResponseWriter, r *http.Request) 
 
 	if req.Name == "" {
 		s.respondError(w, "网站名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	// 获取当前用户
+	user := userFromContext(r.Context())
+	if user == nil {
+		s.respondError(w, "未授权", http.StatusUnauthorized)
 		return
 	}
 
@@ -445,9 +493,15 @@ func (s *DeployServer) handleCreateSite(w http.ResponseWriter, r *http.Request) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 检查配置文件中是否已存在
+	if _, exists := s.config.Sites[name]; exists {
+		s.respondError(w, "网站已存在", http.StatusConflict)
+		return
+	}
+
 	sitePath := filepath.Join(s.config.WebRoot, name)
 	if _, err := os.Stat(sitePath); err == nil {
-		s.respondError(w, "网站已存在", http.StatusConflict)
+		s.respondError(w, "网站目录已存在", http.StatusConflict)
 		return
 	}
 
@@ -465,25 +519,42 @@ func (s *DeployServer) handleCreateSite(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	// 在配置中添加网站
+	s.config.Sites[name] = Site{
+		Name:   name,
+		Desc:   req.Desc,
+		Owner:  user.Name,
+		Users:  []string{},
+	}
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, fmt.Sprintf("保存配置失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 重新加载网站到内存
+	s.reloadSitesFromConfig()
+
 	var domain string
+	var url string
 	if s.config.Mode == "subdomain" {
 		domain = fmt.Sprintf("%s.%s", name, s.config.BaseDomain)
+		url = fmt.Sprintf("http://%s", domain)
 	} else {
 		domain = fmt.Sprintf("%s/%s", s.config.SingleDomain, name)
+		url = fmt.Sprintf("http://%s/%s", s.config.BaseDomain, name)
 	}
 
-	site := &Website{
-		ID:        name,
-		Name:      name,
-		Domain:    domain,
-		Path:      sitePath,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	s.sites[name] = site
-
-	s.respondJSON(w, site)
+	s.respondJSON(w, map[string]interface{}{
+		"id":         name,
+		"name":       name,
+		"domain":     domain,
+		"path":       sitePath,
+		"url":        url,
+		"created_at": time.Now().Format("2006-01-02 15:04:05"),
+		"updated_at": time.Now().Format("2006-01-02 15:04:05"),
+	})
 }
 
 // handleDeleteSite 删除网站
@@ -510,9 +581,27 @@ func (s *DeployServer) handleDeleteSite(w http.ResponseWriter, r *http.Request) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// 检查配置中是否存在
+	siteConfig, exists := s.config.Sites[req.Name]
+	if !exists {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 检查权限（只有所有者或管理员可以删除）
+	user := userFromContext(r.Context())
+	if user == nil || (!user.IsAdmin && siteConfig.Owner != user.Name) {
+		s.respondError(w, "没有权限删除此网站", http.StatusForbidden)
+		return
+	}
+
 	sitePath := filepath.Join(s.config.WebRoot, req.Name)
 	if _, err := os.Stat(sitePath); os.IsNotExist(err) {
-		s.respondError(w, "网站不存在", http.StatusNotFound)
+		// 即使目录不存在，也从配置中删除
+		delete(s.config.Sites, req.Name)
+		s.saveConfig()
+		s.reloadSitesFromConfig()
+		s.respondError(w, "网站目录不存在，但已从配置中删除", http.StatusNotFound)
 		return
 	}
 
@@ -522,7 +611,17 @@ func (s *DeployServer) handleDeleteSite(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	delete(s.sites, req.Name)
+	// 从配置中删除
+	delete(s.config.Sites, req.Name)
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, fmt.Sprintf("保存配置失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 重新加载网站到内存
+	s.reloadSitesFromConfig()
 
 	s.respondJSON(w, map[string]interface{}{
 		"message": "删除成功",
