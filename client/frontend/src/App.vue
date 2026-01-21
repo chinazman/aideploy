@@ -2,6 +2,31 @@
   <div id="app">
     <!-- 主内容区 -->
     <main class="main-content">
+      <!-- 视图切换标签 -->
+      <div class="view-tabs">
+        <div
+          class="view-tab"
+          :class="{ active: currentView === 'sites' }"
+          @click="currentView = 'sites'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75a2.25 2.25 0 002.25-2.25V9.75m-8 6H5.625c-.621 0-1.125-.504-1.125-1.125V4.863a3.375 3.375 0 013.375-3.375h13.5c.621 0 1.125.504 1.125 1.125v6.638M10.5 6h9.75m-9 6v9m9-9v9" />
+          </svg>
+          网站管理
+        </div>
+        <div
+          v-if="isAdmin"
+          class="view-tab"
+          :class="{ active: currentView === 'users' }"
+          @click="currentView = 'users'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.069-4.069 9.337 9.337 0 00-2.625.372 9.38 9.38 0 002.625-.372 9.337 9.337 0 00-4.121.952 4.069-4.069 9.337 9.337 0 002.625-.372zm-10.613.5a9.38 9.38 0 01-2.625-.372m10.613.5a9.337 9.337 0 014.121.952 4.069-4.069 9.337 9.337 0 01-2.625.372 9.38 9.38 0 01-2.625-.372 9.337 9.337 0 00-4.121-.952 4.069-4.069 9.337 9.337 0 012.625.372zM15 12.75a9.38 9.38 0 01-9.387 9.387 9.337 9.337 0 01-9.387-9.387m13.88 0a9.38 9.38 0 00-9.387-9.387m0 9.387a9.337 9.337 0 019.337 9.337M15 12.75a9.337 9.337 0 01-9.337 9.337m0 0a9.337 9.337 0 009.337 9.337" />
+          </svg>
+          用户管理
+        </div>
+      </div>
+
       <!-- 网站管理视图 -->
       <div v-show="currentView === 'sites'" class="view-container">
         <div class="view-header">
@@ -143,6 +168,72 @@
                   class="action-btn danger"
                   title="删除"
                 >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 用户管理视图 -->
+      <div v-show="currentView === 'users'" class="view-container">
+        <div class="view-header">
+          <h2>用户管理</h2>
+          <div class="header-actions">
+            <button @click="showCreateUserModal = true" class="primary-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              新增用户
+            </button>
+          </div>
+        </div>
+
+        <!-- 用户列表 -->
+        <div class="tile-list">
+          <div class="tile-list-header">
+            <h3>用户列表</h3>
+            <button @click="loadUsers" class="icon-btn" title="刷新列表">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </button>
+          </div>
+          <div v-if="users.length === 0" class="empty-state">
+            <p>暂无用户</p>
+          </div>
+          <div v-else class="list-items">
+            <div
+              v-for="user in users"
+              :key="user.name"
+              class="list-item"
+            >
+              <div class="item-main">
+                <div class="item-icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </div>
+                <div class="item-content">
+                  <div class="item-title">
+                    {{ user.name }}
+                    <span v-if="user.isAdmin" class="admin-badge">管理员</span>
+                  </div>
+                  <div class="item-subtitle">
+                    {{ user.isAdmin ? '拥有管理权限' : '普通用户' }}
+                  </div>
+                </div>
+              </div>
+              <div class="item-actions">
+                <button @click="openEditUserModal(user)" class="action-btn" title="编辑">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                  </svg>
+                </button>
+                <button @click="deleteUser(user.name)" class="action-btn danger" title="删除">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                   </svg>
@@ -434,6 +525,109 @@
       </div>
     </div>
 
+    <!-- 创建用户对话框 -->
+    <div v-if="showCreateUserModal" class="modal" @click.self="closeCreateUserModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>新增用户</h2>
+          <button @click="closeCreateUserModal" class="icon-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>用户名</label>
+            <input
+              v-model="newUserName"
+              type="text"
+              placeholder="请输入用户名"
+              @keyup.enter="createUser"
+            />
+          </div>
+          <div class="input-group">
+            <label>密码</label>
+            <input
+              v-model="newUserPassword"
+              type="password"
+              placeholder="请输入密码"
+              @keyup.enter="createUser"
+            />
+          </div>
+          <div class="input-group">
+            <label>角色</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="newUserIsAdmin" />
+                <span>管理员</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button @click="closeCreateUserModal" class="secondary-btn">取消</button>
+            <button @click="createUser" :disabled="!newUserName || !newUserPassword" class="primary-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              创建
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑用户对话框 -->
+    <div v-if="showEditUserModal" class="modal" @click.self="closeEditUserModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>编辑用户 - {{ editingUser?.name }}</h2>
+          <button @click="closeEditUserModal" class="icon-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>用户名</label>
+            <input
+              v-model="editingUser.name"
+              type="text"
+              disabled
+            />
+          </div>
+          <div class="input-group">
+            <label>新密码（留空则不修改）</label>
+            <input
+              v-model="editingUserPassword"
+              type="password"
+              placeholder="留空不修改"
+              @keyup.enter="updateUser"
+            />
+          </div>
+          <div class="input-group">
+            <label>角色</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="editingUserIsAdmin" />
+                <span>管理员</span>
+              </label>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button @click="closeEditUserModal" class="secondary-btn">取消</button>
+            <button @click="updateUser" class="primary-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+              </svg>
+              保存
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 消息提示 -->
     <div v-if="message" class="toast" :class="messageType">
       <div class="toast-icon">
@@ -519,6 +713,7 @@ export default {
   data() {
     return {
       currentView: 'sites',
+      isAdmin: false, // 当前用户是否为管理员
       sites: [], // 改为存储网站对象数组 {name, url, desc}
       newSiteName: '',
       newSiteDesc: '',
@@ -547,6 +742,16 @@ export default {
         password: '',
         site_paths: {}
       },
+      // 用户管理相关
+      users: [],
+      showCreateUserModal: false,
+      showEditUserModal: false,
+      newUserName: '',
+      newUserPassword: '',
+      newUserIsAdmin: false,
+      editingUser: null,
+      editingUserPassword: '',
+      editingUserIsAdmin: false,
       // 自定义确认框
       confirmDialog: {
         show: false,
@@ -583,6 +788,7 @@ export default {
   mounted() {
     this.loadConfig()
     this.loadSites()
+    this.checkAdminStatus()
   },
   methods: {
     async loadConfig() {
@@ -610,6 +816,10 @@ export default {
     async saveAndCloseConfig() {
       await this.saveConfig()
       this.showConfigModal = false
+      // 刷新列表
+      await this.loadSites()
+      // 重新检查管理员权限并加载用户列表
+      await this.checkAdminStatus()
     },
 
     async loadSites() {
@@ -954,6 +1164,124 @@ export default {
       if (this.promptDialog.onConfirm) {
         this.promptDialog.onConfirm(this.promptDialog.value)
       }
+    },
+
+    // 用户管理相关方法
+    async checkAdminStatus() {
+      try {
+        const isAdmin = await window.go.main.App.CheckIsAdmin()
+        this.isAdmin = isAdmin
+        // 如果是管理员，加载用户列表
+        if (isAdmin) {
+          await this.loadUsers()
+        }
+      } catch (error) {
+        console.log('检查管理员权限失败:', error)
+        this.isAdmin = false
+      }
+    },
+
+    async loadUsers() {
+      try {
+        const users = await window.go.main.App.ListUsers()
+        this.users = users
+      } catch (error) {
+        this.showMessage('加载用户失败: ' + error, 'error')
+      }
+    },
+
+    closeCreateUserModal() {
+      this.showCreateUserModal = false
+      this.newUserName = ''
+      this.newUserPassword = ''
+      this.newUserIsAdmin = false
+    },
+
+    async createUser() {
+      if (!this.newUserName.trim()) {
+        this.showMessage('请输入用户名', 'error')
+        return
+      }
+
+      if (!this.newUserPassword.trim()) {
+        this.showMessage('请输入密码', 'error')
+        return
+      }
+
+      try {
+        await window.go.main.App.CreateUser(
+          this.newUserName.trim(),
+          this.newUserPassword.trim(),
+          this.newUserIsAdmin
+        )
+        this.showMessage('用户创建成功', 'success')
+        this.closeCreateUserModal()
+        await this.loadUsers()
+      } catch (error) {
+        this.showMessage('创建失败: ' + error, 'error')
+      }
+    },
+
+    openEditUserModal(user) {
+      this.editingUser = { ...user }
+      this.editingUserPassword = ''
+      this.editingUserIsAdmin = user.isAdmin
+      this.showEditUserModal = true
+    },
+
+    closeEditUserModal() {
+      this.showEditUserModal = false
+      this.editingUser = null
+      this.editingUserPassword = ''
+      this.editingUserIsAdmin = false
+    },
+
+    async updateUser() {
+      if (!this.editingUser) {
+        return
+      }
+
+      try {
+        // 如果没有修改密码也不修改权限，就不调用API
+        if (!this.editingUserPassword && this.editingUserIsAdmin === this.editingUser.isAdmin) {
+          this.showMessage('没有修改任何内容', 'info')
+          return
+        }
+
+        // 确定要更新的isAdmin值
+        let isAdminPtr = null
+        if (this.editingUserIsAdmin !== this.editingUser.isAdmin) {
+          isAdminPtr = this.editingUserIsAdmin
+        }
+
+        await window.go.main.App.UpdateUser(
+          this.editingUser.name,
+          this.editingUserPassword.trim(),
+          isAdminPtr
+        )
+        this.showMessage('用户更新成功', 'success')
+        this.closeEditUserModal()
+        await this.loadUsers()
+      } catch (error) {
+        this.showMessage('更新失败: ' + error, 'error')
+      }
+    },
+
+    async deleteUser(username) {
+      const confirmed = await this.showConfirm(
+        '删除用户',
+        `确定要删除用户 "${username}" 吗？此操作不可恢复！`,
+        'danger'
+      )
+      if (!confirmed) return
+
+      try {
+        await window.go.main.App.DeleteUser(username)
+        this.showMessage('用户删除成功', 'success')
+        await this.loadUsers()
+      } catch (error) {
+        this.showMessage('删除失败: ' + error, 'error')
+      }
     }
   }
 }
@@ -977,10 +1305,53 @@ export default {
   flex: 1;
   overflow-y: auto;
   background: transparent;
+  padding: 40px;
+}
+
+/* 视图切换标签 */
+.view-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 30px;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.view-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: rgba(30, 41, 59, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: #94a3b8;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.view-tab svg {
+  width: 20px;
+  height: 20px;
+}
+
+.view-tab:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #cbd5e1;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.view-tab.active {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
 }
 
 .view-container {
-  padding: 40px;
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -1800,5 +2171,40 @@ button:disabled {
   outline: none;
   border-color: #38bdf8;
   box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+/* 用户管理相关样式 */
+.admin-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: white;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-left: 8px;
+  font-weight: 500;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #cbd5e1;
+  user-select: none;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #38bdf8;
 }
 </style>

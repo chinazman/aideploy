@@ -614,3 +614,200 @@ func (a *App) PullSite(name string) error {
 
 	return nil
 }
+
+// UserInfo 用户信息
+type UserInfo struct {
+	Name    string `json:"name"`
+	IsAdmin bool   `json:"isAdmin"`
+}
+
+// CheckIsAdmin 检查当前用户是否是管理员
+func (a *App) CheckIsAdmin() (bool, error) {
+	url := fmt.Sprintf("%s/users/list", a.apiBaseURL)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+
+	a.addAuthToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	// 如果返回 403，说明不是管理员
+	if resp.StatusCode == http.StatusForbidden {
+		return false, nil
+	}
+
+	// 如果返回 200，说明是管理员
+	if resp.StatusCode == http.StatusOK {
+		return true, nil
+	}
+
+	// 其他错误
+	body, _ := io.ReadAll(resp.Body)
+	return false, fmt.Errorf(string(body))
+}
+
+// ListUsers 列出所有用户（管理员）
+func (a *App) ListUsers() ([]UserInfo, error) {
+	url := fmt.Sprintf("%s/users/list", a.apiBaseURL)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	a.addAuthToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+
+	usersInterface, ok := result["users"].([]interface{})
+	if !ok {
+		return []UserInfo{}, nil
+	}
+
+	users := make([]UserInfo, 0, len(usersInterface))
+	for _, u := range usersInterface {
+		userMap, ok := u.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, _ := userMap["name"].(string)
+		isAdmin, _ := userMap["isAdmin"].(bool)
+
+		users = append(users, UserInfo{
+			Name:    name,
+			IsAdmin: isAdmin,
+		})
+	}
+
+	return users, nil
+}
+
+// CreateUser 创建用户（管理员）
+func (a *App) CreateUser(name, password string, isAdmin bool) error {
+	payload := map[string]interface{}{
+		"name":     name,
+		"password": password,
+		"isAdmin":  isAdmin,
+	}
+
+	data, _ := json.Marshal(payload)
+	url := fmt.Sprintf("%s/users/create", a.apiBaseURL)
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAuthToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf(string(body))
+	}
+
+	return nil
+}
+
+// UpdateUser 更新用户（管理员）
+func (a *App) UpdateUser(name string, password string, isAdmin *bool) error {
+	payload := map[string]interface{}{
+		"name": name,
+	}
+
+	if password != "" {
+		payload["password"] = password
+	}
+
+	if isAdmin != nil {
+		payload["isAdmin"] = *isAdmin
+	}
+
+	data, _ := json.Marshal(payload)
+	url := fmt.Sprintf("%s/users/update", a.apiBaseURL)
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAuthToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf(string(body))
+	}
+
+	return nil
+}
+
+// DeleteUser 删除用户（管理员）
+func (a *App) DeleteUser(name string) error {
+	payload := map[string]string{
+		"name": name,
+	}
+
+	data, _ := json.Marshal(payload)
+	url := fmt.Sprintf("%s/users/delete", a.apiBaseURL)
+	req, err := http.NewRequest("POST", url, strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAuthToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf(string(body))
+	}
+
+	return nil
+}
+

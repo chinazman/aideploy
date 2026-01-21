@@ -148,10 +148,15 @@ func (s *DeployServer) authenticate(username, password string) (*User, error) {
 }
 
 // canAccessSite 检查用户是否有权限访问网站
-func (s *DeployServer) canAccessSite(siteName, username string) bool {
+func (s *DeployServer) canAccessSite(siteName, username string, user *User) bool {
 	site, exists := s.config.Sites[siteName]
 	if !exists {
 		return false
+	}
+
+	// 管理员可以访问所有网站
+	if user != nil && user.IsAdmin {
+		return true
 	}
 
 	// 检查是否是所有者
@@ -414,7 +419,7 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 			// 如果配置了用户系统，进行权限过滤
 			if user != nil {
 				// 检查用户是否有权限访问此网站
-				if !s.canAccessSite(siteName, user.Name) {
+				if !s.canAccessSite(siteName, user.Name, user) {
 					continue
 				}
 			}
