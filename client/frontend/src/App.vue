@@ -64,11 +64,11 @@
                   </svg>
                 </div>
                 <div class="item-content">
-                  <div class="item-title">{{ site.name }}</div>
-                  <div class="item-subtitle" v-if="site.desc">
-                    {{ site.desc }}
+                  <div class="item-title">
+                    {{ site.name }}
+                    <span v-if="site.desc" class="site-desc">【{{ site.desc }}】</span>
                   </div>
-                  <div class="item-subtitle" v-else-if="config.site_paths && config.site_paths[site.name]">
+                  <div class="item-subtitle" v-if="config.site_paths && config.site_paths[site.name]">
                     {{ config.site_paths[site.name] }}
                   </div>
                   <div class="item-subtitle" v-else>
@@ -878,6 +878,13 @@ export default {
   font-weight: 600;
   color: #f1f5f9; /* Slate 100 */
   margin-bottom: 6px;
+}
+
+.site-desc {
+  font-size: 14px;
+  font-weight: 400;
+  color: #94a3b8; /* Slate 400 */
+  margin-left: 8px;
 }
 
 .item-subtitle {

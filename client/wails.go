@@ -281,10 +281,14 @@ func (a *App) ListSites() ([]SiteInfo, error) {
 	for _, site := range sites {
 		if siteMap, ok := site.(map[string]interface{}); ok {
 			name, _ := siteMap["name"].(string)
+			domain, _ := siteMap["domain"].(string)
+			desc, _ := siteMap["desc"].(string)
 			url, _ := siteMap["url"].(string)
 			siteList = append(siteList, SiteInfo{
-				Name: name,
-				URL:  url,
+				Name:   name,
+				Domain: domain,
+				Desc:   desc,
+				URL:    url,
 			})
 		}
 	}
