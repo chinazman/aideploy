@@ -399,10 +399,11 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 
 	// 构建网站信息列表
 	type SiteInfo struct {
-		Name   string `json:"name"`
-		Domain string `json:"domain"`
-		Desc   string `json:"desc"`
-		URL    string `json:"url"`
+		Name   string   `json:"name"`
+		Domain string   `json:"domain"`
+		Desc   string   `json:"desc"`
+		URL    string   `json:"url"`
+		Users  []string `json:"users"`
 	}
 
 	sites := []SiteInfo{}
@@ -452,6 +453,7 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 				Domain: domain,
 				Desc:   desc,
 				URL:    siteURL,
+				Users:  siteConfig.Users,
 			})
 		}
 	}
@@ -656,8 +658,9 @@ func (s *DeployServer) handleUpdateSite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Name string `json:"name"`
-		Desc string `json:"desc"`
+		Name  string   `json:"name"`
+		Desc  string   `json:"desc"`
+		Users []string `json:"users"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -687,8 +690,9 @@ func (s *DeployServer) handleUpdateSite(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 更新描述
+	// 更新描述和授权用户
 	siteConfig.Desc = req.Desc
+	siteConfig.Users = req.Users
 	s.config.Sites[req.Name] = siteConfig
 
 	// 保存配置

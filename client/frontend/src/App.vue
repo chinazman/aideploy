@@ -287,6 +287,14 @@
               @keyup.enter="updateSite"
             />
           </div>
+          <div class="input-group">
+            <label>授权用户</label>
+            <input
+              v-model="editingSiteUsers"
+              type="text"
+              placeholder="多个用户用逗号分隔（可选）"
+            />
+          </div>
           <div class="modal-actions">
             <button @click="closeEditSiteModal" class="secondary-btn">取消</button>
             <button @click="updateSite" class="primary-btn">
@@ -464,6 +472,7 @@ export default {
       showEditSiteModal: false,
       editingSite: null,
       editingSiteDesc: '',
+      editingSiteUsers: '',
       showDeployModalFlag: false,
       showConfigModal: false,
       checkingChanges: false,
@@ -594,6 +603,7 @@ export default {
     openEditSiteModal(site) {
       this.editingSite = { ...site }
       this.editingSiteDesc = site.desc || ''
+      this.editingSiteUsers = (site.users && site.users.length > 0) ? site.users.join(', ') : ''
       this.showEditSiteModal = true
     },
 
@@ -601,6 +611,7 @@ export default {
       this.showEditSiteModal = false
       this.editingSite = null
       this.editingSiteDesc = ''
+      this.editingSiteUsers = ''
     },
 
     async updateSite() {
@@ -609,8 +620,14 @@ export default {
       }
 
       try {
-        await window.go.main.App.UpdateSiteDesc(this.editingSite.name, this.editingSiteDesc)
-        this.showMessage('网站描述更新成功', 'success')
+        // 处理用户列表：按逗号分隔，去空格，过滤空字符串
+        const users = this.editingSiteUsers
+          .split(',')
+          .map(u => u.trim())
+          .filter(u => u.length > 0)
+
+        await window.go.main.App.UpdateSite(this.editingSite.name, this.editingSiteDesc, users)
+        this.showMessage('网站信息更新成功', 'success')
         this.closeEditSiteModal()
         await this.loadSites()
       } catch (error) {

@@ -218,11 +218,12 @@ func (a *App) DeleteSite(name string) error {
 	return nil
 }
 
-// UpdateSiteDesc 更新网站描述
-func (a *App) UpdateSiteDesc(name, desc string) error {
-	payload := map[string]string{
-		"name": name,
-		"desc": desc,
+// UpdateSite 更新网站信息
+func (a *App) UpdateSite(name, desc string, users []string) error {
+	payload := map[string]interface{}{
+		"name":   name,
+		"desc":   desc,
+		"users":  users,
 	}
 
 	data, _ := json.Marshal(payload)
@@ -270,10 +271,11 @@ func (a *App) DeploySite(name, message string) error {
 
 // SiteInfo 网站信息
 type SiteInfo struct {
-	Name   string `json:"name"`
-	Domain string `json:"domain"`
-	Desc   string `json:"desc"`
-	URL    string `json:"url"`
+	Name   string   `json:"name"`
+	Domain string   `json:"domain"`
+	Desc   string   `json:"desc"`
+	URL    string   `json:"url"`
+	Users  []string `json:"users"`
 }
 
 // ListSites 列出所有网站
@@ -315,11 +317,23 @@ func (a *App) ListSites() ([]SiteInfo, error) {
 			domain, _ := siteMap["domain"].(string)
 			desc, _ := siteMap["desc"].(string)
 			url, _ := siteMap["url"].(string)
+
+			// 解析用户列表
+			var users []string
+			if usersInterface, ok := siteMap["users"].([]interface{}); ok {
+				for _, u := range usersInterface {
+					if userStr, ok := u.(string); ok {
+						users = append(users, userStr)
+					}
+				}
+			}
+
 			siteList = append(siteList, SiteInfo{
 				Name:   name,
 				Domain: domain,
 				Desc:   desc,
 				URL:    url,
+				Users:  users,
 			})
 		}
 	}
