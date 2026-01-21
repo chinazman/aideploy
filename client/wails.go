@@ -239,8 +239,10 @@ func (a *App) DeploySite(name, message string) error {
 
 // SiteInfo 网站信息
 type SiteInfo struct {
-	Name string `json:"name"`
-	URL  string `json:"url"`
+	Name   string `json:"name"`
+	Domain string `json:"domain"`
+	Desc   string `json:"desc"`
+	URL    string `json:"url"`
 }
 
 // ListSites 列出所有网站
