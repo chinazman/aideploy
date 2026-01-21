@@ -218,6 +218,37 @@ func (a *App) DeleteSite(name string) error {
 	return nil
 }
 
+// UpdateSiteDesc 更新网站描述
+func (a *App) UpdateSiteDesc(name, desc string) error {
+	payload := map[string]string{
+		"name": name,
+		"desc": desc,
+	}
+
+	data, _ := json.Marshal(payload)
+	req, err := http.NewRequest("POST", a.apiBaseURL+"/sites/update", strings.NewReader(string(data)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	a.addAuthToRequest(req)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf(string(body))
+	}
+
+	return nil
+}
+
 // DeploySite 部署网站 (使用绑定的目录)
 func (a *App) DeploySite(name, message string) error {
 	// 从配置中获取绑定的目录

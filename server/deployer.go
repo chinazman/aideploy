@@ -220,6 +220,7 @@ func (s *DeployServer) Start() error {
 	// API路由
 	mux.HandleFunc("/api/sites", s.corsMiddleware(s.authMiddleware(s.handleSites)))
 	mux.HandleFunc("/api/sites/create", s.corsMiddleware(s.authMiddleware(s.handleCreateSite)))
+	mux.HandleFunc("/api/sites/update", s.corsMiddleware(s.authMiddleware(s.handleUpdateSite)))
 	mux.HandleFunc("/api/sites/delete", s.corsMiddleware(s.authMiddleware(s.handleDeleteSite)))
 	mux.HandleFunc("/api/sites/deploy", s.corsMiddleware(s.authMiddleware(s.handleDeploy)))
 	mux.HandleFunc("/api/sites/deploy-full", s.corsMiddleware(s.authMiddleware(s.handleDeployFull))) // 全量部署
@@ -644,6 +645,63 @@ func (s *DeployServer) handleDeleteSite(w http.ResponseWriter, r *http.Request) 
 
 	s.respondJSON(w, map[string]interface{}{
 		"message": "删除成功",
+	})
+}
+
+// handleUpdateSite 更新网站信息
+func (s *DeployServer) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		s.respondError(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name string `json:"name"`
+		Desc string `json:"desc"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.respondError(w, "无效的请求", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		s.respondError(w, "网站名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 检查配置中是否存在
+	siteConfig, exists := s.config.Sites[req.Name]
+	if !exists {
+		s.respondError(w, "网站不存在", http.StatusNotFound)
+		return
+	}
+
+	// 检查权限（只有所有者或管理员可以更新）
+	user := userFromContext(r.Context())
+	if user == nil || (!user.IsAdmin && siteConfig.Owner != user.Name) {
+		s.respondError(w, "没有权限更新此网站", http.StatusForbidden)
+		return
+	}
+
+	// 更新描述
+	siteConfig.Desc = req.Desc
+	s.config.Sites[req.Name] = siteConfig
+
+	// 保存配置
+	if err := s.saveConfig(); err != nil {
+		s.respondError(w, fmt.Sprintf("保存配置失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 重新加载网站到内存
+	s.reloadSitesFromConfig()
+
+	s.respondJSON(w, map[string]interface{}{
+		"message": "更新成功",
 	})
 }
 

@@ -117,6 +117,11 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
                   </svg>
                 </button>
+                <button @click="openEditSiteModal(site)" class="action-btn" title="编辑">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+                  </svg>
+                </button>
                 <button @click="showVersions(site.name)" class="action-btn" title="版本历史">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -247,6 +252,48 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
               </svg>
               创建并绑定
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 编辑网站对话框 -->
+    <div v-if="showEditSiteModal" class="modal" @click.self="closeEditSiteModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>编辑网站 - {{ editingSite?.name }}</h2>
+          <button @click="closeEditSiteModal" class="icon-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group">
+            <label>网站名称</label>
+            <input
+              v-model="editingSite.name"
+              type="text"
+              disabled
+            />
+          </div>
+          <div class="input-group">
+            <label>网站描述</label>
+            <input
+              v-model="editingSiteDesc"
+              type="text"
+              placeholder="请输入网站描述（可选）"
+              @keyup.enter="updateSite"
+            />
+          </div>
+          <div class="modal-actions">
+            <button @click="closeEditSiteModal" class="secondary-btn">取消</button>
+            <button @click="updateSite" class="primary-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125" />
+              </svg>
+              保存
             </button>
           </div>
         </div>
@@ -414,6 +461,9 @@ export default {
       currentDeploySite: '',
       showVersionsModal: false,
       showCreateSiteModal: false,
+      showEditSiteModal: false,
+      editingSite: null,
+      editingSiteDesc: '',
       showDeployModalFlag: false,
       showConfigModal: false,
       checkingChanges: false,
@@ -539,6 +589,33 @@ export default {
       this.newSiteName = ''
       this.newSiteDesc = ''
       this.newSitePath = ''
+    },
+
+    openEditSiteModal(site) {
+      this.editingSite = { ...site }
+      this.editingSiteDesc = site.desc || ''
+      this.showEditSiteModal = true
+    },
+
+    closeEditSiteModal() {
+      this.showEditSiteModal = false
+      this.editingSite = null
+      this.editingSiteDesc = ''
+    },
+
+    async updateSite() {
+      if (!this.editingSite) {
+        return
+      }
+
+      try {
+        await window.go.main.App.UpdateSiteDesc(this.editingSite.name, this.editingSiteDesc)
+        this.showMessage('网站描述更新成功', 'success')
+        this.closeEditSiteModal()
+        await this.loadSites()
+      } catch (error) {
+        this.showMessage('更新失败: ' + error, 'error')
+      }
     },
 
     async bindDirectory(site) {
