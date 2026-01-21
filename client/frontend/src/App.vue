@@ -21,9 +21,20 @@
           @click="currentView = 'users'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.069-4.069 9.337 9.337 0 00-2.625.372 9.38 9.38 0 002.625-.372 9.337 9.337 0 00-4.121.952 4.069-4.069 9.337 9.337 0 002.625-.372zm-10.613.5a9.38 9.38 0 01-2.625-.372m10.613.5a9.337 9.337 0 014.121.952 4.069-4.069 9.337 9.337 0 01-2.625.372 9.38 9.38 0 01-2.625-.372 9.337 9.337 0 00-4.121-.952 4.069-4.069 9.337 9.337 0 012.625.372zM15 12.75a9.38 9.38 0 01-9.387 9.387 9.337 9.337 0 01-9.387-9.387m13.88 0a9.38 9.38 0 00-9.387-9.387m0 9.387a9.337 9.337 0 019.337 9.337M15 12.75a9.337 9.337 0 01-9.337 9.337m0 0a9.337 9.337 0 009.337 9.337" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
           </svg>
           用户管理
+        </div>
+        <div
+          class="view-tab"
+          :class="{ active: currentView === 'settings' }"
+          @click="currentView = 'settings'"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          系统设置
         </div>
       </div>
 
@@ -32,13 +43,6 @@
         <div class="view-header">
           <h2>网站管理</h2>
           <div class="header-actions">
-            <button @click="showConfigModal = true" class="secondary-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              系统设置
-            </button>
             <button @click="showCreateSiteModal = true" class="primary-btn">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -243,56 +247,57 @@
           </div>
         </div>
       </div>
-    </main>
 
-    <!-- 系统设置对话框 -->
-    <div v-if="showConfigModal" class="modal" @click.self="closeConfigModal">
-      <div class="modal-content">
-        <div class="modal-header">
+      <!-- 系统设置视图 -->
+      <div v-show="currentView === 'settings'" class="view-container">
+        <div class="view-header">
           <h2>系统设置</h2>
-          <button @click="closeConfigModal" class="icon-btn">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
-        <div class="modal-body">
-          <div class="input-group">
-            <label>服务器地址</label>
-            <input
-              v-model="config.server_url"
-              type="text"
-              placeholder="http://localhost:8080/api"
-            />
-          </div>
-          <div class="input-group">
-            <label>用户名</label>
-            <input
-              v-model="config.username"
-              type="text"
-              placeholder="请输入用户名"
-            />
-          </div>
-          <div class="input-group">
-            <label>密码</label>
-            <input
-              v-model="config.password"
-              type="password"
-              placeholder="请输入密码"
-            />
-          </div>
-          <div class="modal-actions">
-            <button @click="closeConfigModal" class="secondary-btn">取消</button>
-            <button @click="saveAndCloseConfig" class="primary-btn">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-              </svg>
-              保存配置
-            </button>
+
+        <!-- 设置表单 -->
+        <div class="settings-form">
+          <div class="tile-list">
+            <div class="tile-list-header">
+              <h3>连接配置</h3>
+            </div>
+            <div class="settings-content">
+              <div class="input-group">
+                <label>服务器地址</label>
+                <input
+                  v-model="config.server_url"
+                  type="text"
+                  placeholder="http://localhost:8080/api"
+                />
+              </div>
+              <div class="input-group">
+                <label>用户名</label>
+                <input
+                  v-model="config.username"
+                  type="text"
+                  placeholder="请输入用户名"
+                />
+              </div>
+              <div class="input-group">
+                <label>密码</label>
+                <input
+                  v-model="config.password"
+                  type="password"
+                  placeholder="请输入密码"
+                />
+              </div>
+              <div class="settings-actions">
+                <button @click="saveSettings" class="primary-btn">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                  保存配置
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- 新增网站对话框 -->
     <div v-if="showCreateSiteModal" class="modal" @click.self="closeCreateSiteModal">
@@ -730,7 +735,6 @@ export default {
       editingSiteDesc: '',
       editingSiteUsers: '',
       showDeployModalFlag: false,
-      showConfigModal: false,
       checkingChanges: false,
       changesResult: null,
       message: '',
@@ -809,13 +813,8 @@ export default {
       }
     },
 
-    closeConfigModal() {
-      this.showConfigModal = false
-    },
-
-    async saveAndCloseConfig() {
+    async saveSettings() {
       await this.saveConfig()
-      this.showConfigModal = false
       // 刷新列表
       await this.loadSites()
       // 重新检查管理员权限并加载用户列表
@@ -2206,5 +2205,23 @@ button:disabled {
   height: 18px;
   cursor: pointer;
   accent-color: #38bdf8;
+}
+
+/* 系统设置视图样式 */
+.settings-form {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.settings-content {
+  padding: 30px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 20px 0 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 10px;
 }
 </style>

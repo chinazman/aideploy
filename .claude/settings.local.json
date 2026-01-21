@@ -18,7 +18,8 @@
       "Bash(F:/work/aideploy/bin/deploy-cli.exe deploy-full:*)",
       "Bash(./deploy-cli.exe deploy-full:*)",
       "Bash(./deploy-cli.exe create:*)",
-      "Bash(./test-cli.exe:*)"
+      "Bash(./test-cli.exe:*)",
+      "Bash(git add:*)"
     ]
   }
 }

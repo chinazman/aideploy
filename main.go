@@ -15,6 +15,19 @@ func main() {
 	createConfig := flag.Bool("init", false, "创建默认配置文件")
 	flag.Parse()
 
+	// 检查配置文件是否存在
+	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
+		// 配置文件不存在,自动创建默认配置
+		fmt.Printf("配置文件不存在,正在创建默认配置: %s\n", *configPath)
+		if err := createDefaultConfig(*configPath); err != nil {
+			fmt.Printf("创建配置文件失败: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("已创建默认配置文件: %s\n", *configPath)
+		fmt.Println("默认管理员: admin / admin123")
+		fmt.Println("服务器将使用默认配置启动...")
+	}
+
 	// 如果需要创建默认配置
 	if *createConfig {
 		if err := createDefaultConfig(*configPath); err != nil {

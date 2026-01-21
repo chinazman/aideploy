@@ -1,9 +1,36 @@
 {
-  "base_domain": "example.com",
-  "web_root": "./websites",
+  "base_domain": "localhost",
+  "web_root": "F:\\work\\aideploy\\bin\\websites",
   "mode": "subdomain",
   "single_domain": "",
-  "port": 8080,
+  "port": 80,
   "enable_versioning": true,
-  "api_key": ""
+  "sites": {
+    "abc1": {
+      "name": "abc1",
+      "desc": "",
+      "owner": "admin",
+      "users": []
+    },
+    "abc2": {
+      "name": "abc2",
+      "desc": "a site",
+      "owner": "admin",
+      "users": [
+        "user1"
+      ]
+    }
+  },
+  "users": {
+    "admin": {
+      "name": "admin",
+      "pass": "admin123",
+      "isAdmin": true
+    },
+    "user1": {
+      "name": "user1",
+      "pass": "user123",
+      "isAdmin": false
+    }
+  }
 }
