@@ -398,8 +398,10 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 
 	// 构建网站信息列表
 	type SiteInfo struct {
-		Name string `json:"name"`
-		URL  string `json:"url"`
+		Name   string `json:"name"`
+		Domain string `json:"domain"`
+		Desc   string `json:"desc"`
+		URL    string `json:"url"`
 	}
 
 	sites := []SiteInfo{}
@@ -415,24 +417,40 @@ func (s *DeployServer) handleListSites(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
+			// 从配置中获取网站信息
+			siteConfig, exists := s.config.Sites[siteName]
+			var desc string
+			if exists {
+				desc = siteConfig.Desc
+			}
+
 			var siteURL string
+			var domain string
 
 			// 根据模式生成 URL
 			if s.config.Mode == "subdomain" {
 				// 子域名模式: siteName.baseDomain
-				siteURL = fmt.Sprintf("%s://%s.%s", scheme, siteName, s.config.BaseDomain)
+				domain = fmt.Sprintf("%s.%s", siteName, s.config.BaseDomain)
+				siteURL = fmt.Sprintf("%s://%s", scheme, domain)
 				// 如果有端口，添加端口
 				if s.config.Port != 80 && s.config.Port != 443 {
 					siteURL = fmt.Sprintf("%s:%d", siteURL, s.config.Port)
+					domain = fmt.Sprintf("%s:%d", domain, s.config.Port)
 				}
 			} else {
 				// 路径模式: host/siteName
-				siteURL = fmt.Sprintf("%s://%s/%s", scheme, host, siteName)
+				domain = fmt.Sprintf("%s/%s", s.config.BaseDomain, siteName)
+				siteURL = fmt.Sprintf("%s://%s", scheme, host)
+				if s.config.Port != 80 && s.config.Port != 443 {
+					siteURL = fmt.Sprintf("%s:%d", siteURL, s.config.Port)
+				}
 			}
 
 			sites = append(sites, SiteInfo{
-				Name: siteName,
-				URL:  siteURL,
+				Name:   siteName,
+				Domain: domain,
+				Desc:   desc,
+				URL:    siteURL,
 			})
 		}
 	}
