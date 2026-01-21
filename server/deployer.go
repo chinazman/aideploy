@@ -927,11 +927,19 @@ func (s *DeployServer) commitChanges(path, message string) error {
 
 // getGitVersions 获取git版本列表
 func (s *DeployServer) getGitVersions(path string) ([]Version, error) {
+	// 首先检查 .git 目录是否存在
+	gitDir := filepath.Join(path, ".git")
+	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
+		// Git 仓库不存在，返回空列表而不是错误
+		return []Version{}, nil
+	}
+
 	cmd := exec.Command("git", "log", "--pretty=format:%H|%s|%an|%ai", "-20")
 	cmd.Dir = path
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, err
+		// 如果 git log 失败（可能没有提交），返回空列表
+		return []Version{}, nil
 	}
 
 	lines := strings.Split(string(output), "\n")

@@ -449,6 +449,67 @@
       </div>
       <div class="toast-content">{{ message }}</div>
     </div>
+
+    <!-- 自定义确认对话框 -->
+    <div v-if="confirmDialog.show" class="modal" @click.self="closeConfirmDialog">
+      <div class="modal-content confirm-dialog">
+        <div class="modal-header">
+          <h2>{{ confirmDialog.title }}</h2>
+          <button @click="closeConfirmDialog" class="icon-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="confirm-icon" :class="confirmDialog.type">
+            <svg v-if="confirmDialog.type === 'danger'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+            </svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+          </div>
+          <div class="confirm-message">{{ confirmDialog.message }}</div>
+          <div class="modal-actions">
+            <button @click="closeConfirmDialog" class="secondary-btn">取消</button>
+            <button @click="confirmDialog.onConfirm" :class="confirmDialog.type === 'danger' ? 'danger-btn' : 'warning-btn'">
+              确认
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 自定义输入对话框 -->
+    <div v-if="promptDialog.show" class="modal" @click.self="closePromptDialog">
+      <div class="modal-content prompt-dialog">
+        <div class="modal-header">
+          <h2>{{ promptDialog.title }}</h2>
+          <button @click="closePromptDialog" class="icon-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div v-if="promptDialog.message" class="prompt-message">{{ promptDialog.message }}</div>
+          <div class="input-group">
+            <input
+              v-model="promptDialog.value"
+              type="text"
+              :placeholder="promptDialog.placeholder"
+              @keyup.enter="confirmPrompt"
+              ref="promptInput"
+            />
+          </div>
+          <div class="modal-actions">
+            <button @click="closePromptDialog" class="secondary-btn">取消</button>
+            <button @click="confirmPrompt" class="primary-btn">确认</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -485,6 +546,22 @@ export default {
         username: '',
         password: '',
         site_paths: {}
+      },
+      // 自定义确认框
+      confirmDialog: {
+        show: false,
+        title: '',
+        message: '',
+        type: 'danger',
+        onConfirm: null
+      },
+      promptDialog: {
+        show: false,
+        title: '',
+        message: '',
+        defaultValue: '',
+        placeholder: '',
+        onConfirm: null
       }
     }
   },
@@ -702,9 +779,12 @@ export default {
     },
 
     async deleteSite(site) {
-      if (!confirm(`确定要删除网站 "${site}" 吗？此操作不可恢复！`)) {
-        return
-      }
+      const confirmed = await this.showConfirm(
+        '删除网站',
+        `确定要删除网站 "${site}" 吗？此操作不可恢复！`,
+        'danger'
+      )
+      if (!confirmed) return
 
       try {
         await window.go.main.App.DeleteSite(site)
@@ -721,9 +801,12 @@ export default {
     },
 
     async unbindDirectory(site) {
-      if (!confirm(`确定要解绑网站 "${site}" 的目录吗？`)) {
-        return
-      }
+      const confirmed = await this.showConfirm(
+        '解绑目录',
+        `确定要解绑网站 "${site}" 的目录吗？`,
+        'warning'
+      )
+      if (!confirmed) return
 
       try {
         delete this.config.site_paths[site]
@@ -736,9 +819,12 @@ export default {
 
     async pullFromServer(site) {
       const dirPath = this.config.site_paths[site]
-      if (!confirm(`确定要从服务器下载网站 "${site}" 并覆盖本地目录 "${dirPath}" 吗？\n\n此操作将清空本地目录并从服务器下载最新文件。`)) {
-        return
-      }
+      const confirmed = await this.showConfirm(
+        '从服务器覆盖本地',
+        `确定要从服务器下载网站 "${site}" 并覆盖本地目录吗？\n\n本地目录: ${dirPath}\n\n此操作将清空本地目录并从服务器下载最新文件。`,
+        'warning'
+      )
+      if (!confirmed) return
 
       try {
         await window.go.main.App.PullSite(site)
@@ -755,7 +841,12 @@ export default {
         this.versions = versions
         this.showVersionsModal = true
       } catch (error) {
-        this.showMessage('获取版本失败: ' + error, 'error')
+        // 检查是否是未发布的错误
+        if (error.includes('从未发布过') || error.includes('no versions found') || error.includes('暂无版本')) {
+          this.showMessage('该网站还未发布过，暂无版本历史', 'info')
+        } else {
+          this.showMessage('获取版本失败: ' + error, 'error')
+        }
       }
     },
 
@@ -766,7 +857,13 @@ export default {
     },
 
     async rollbackTo(hash) {
-      const message = prompt('请输入回滚说明:', '回滚到版本 ' + hash.substring(0, 7))
+      const shortHash = hash.substring(0, 7)
+      const message = await this.showPrompt(
+        '回滚版本',
+        `请输入回滚说明：`,
+        `回滚到版本 ${shortHash}`,
+        '请输入本次回滚的说明...'
+      )
       if (message === null) return
 
       try {
@@ -807,6 +904,56 @@ export default {
       setTimeout(() => {
         this.message = ''
       }, 3000)
+    },
+
+    // 自定义确认框
+    showConfirm(title, message, type = 'danger') {
+      return new Promise((resolve) => {
+        this.confirmDialog = {
+          show: true,
+          title,
+          message,
+          type,
+          onConfirm: () => {
+            this.confirmDialog.show = false
+            resolve(true)
+          }
+        }
+      })
+    },
+
+    closeConfirmDialog() {
+      this.confirmDialog.show = false
+      this.confirmDialog.onConfirm = null
+    },
+
+    // 自定义输入框
+    showPrompt(title, message, defaultValue = '', placeholder = '') {
+      return new Promise((resolve) => {
+        this.promptDialog = {
+          show: true,
+          title,
+          message,
+          defaultValue,
+          placeholder,
+          value: defaultValue,
+          onConfirm: (value) => {
+            this.promptDialog.show = false
+            resolve(value)
+          }
+        }
+      })
+    },
+
+    closePromptDialog() {
+      this.promptDialog.show = false
+      this.promptDialog.onConfirm = null
+    },
+
+    confirmPrompt() {
+      if (this.promptDialog.onConfirm) {
+        this.promptDialog.onConfirm(this.promptDialog.value)
+      }
     }
   }
 }
@@ -1577,5 +1724,81 @@ button:disabled {
   color: #64748b;
   font-family: monospace;
   margin-left: auto;
+}
+
+/* 自定义确认对话框 */
+.confirm-dialog {
+  max-width: 480px;
+}
+
+.confirm-icon {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.confirm-icon svg {
+  width: 64px;
+  height: 64px;
+}
+
+.confirm-icon.danger {
+  color: #f87171;
+}
+
+.confirm-icon.warning {
+  color: #fbbf24;
+}
+
+.confirm-message {
+  text-align: center;
+  font-size: 15px;
+  color: #cbd5e1;
+  line-height: 1.6;
+  white-space: pre-line;
+  margin-bottom: 24px;
+}
+
+.danger-btn {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.danger-btn:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
+}
+
+/* 自定义输入对话框 */
+.prompt-dialog {
+  max-width: 500px;
+}
+
+.prompt-message {
+  font-size: 14px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+
+.prompt-dialog .input-group {
+  margin-bottom: 24px;
+}
+
+.prompt-dialog .input-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #0f172a;
+  color: #f1f5f9;
+  font-size: 14px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.prompt-dialog .input-group input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 </style>
