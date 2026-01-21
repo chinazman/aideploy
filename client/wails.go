@@ -129,6 +129,7 @@ type Website struct {
 	Name      string `json:"name"`
 	Domain    string `json:"domain"`
 	Path      string `json:"path"`
+	Desc      string `json:"desc"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -151,9 +152,10 @@ func (a *App) addAuthToRequest(req *http.Request) {
 }
 
 // CreateSite 创建网站
-func (a *App) CreateSite(name string) (*Website, error) {
+func (a *App) CreateSite(name, desc string) (*Website, error) {
 	payload := map[string]string{
 		"name": name,
+		"desc": desc,
 	}
 
 	data, _ := json.Marshal(payload)

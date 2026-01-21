@@ -65,7 +65,10 @@
                 </div>
                 <div class="item-content">
                   <div class="item-title">{{ site.name }}</div>
-                  <div class="item-subtitle" v-if="config.site_paths && config.site_paths[site.name]">
+                  <div class="item-subtitle" v-if="site.desc">
+                    {{ site.desc }}
+                  </div>
+                  <div class="item-subtitle" v-else-if="config.site_paths && config.site_paths[site.name]">
                     {{ config.site_paths[site.name] }}
                   </div>
                   <div class="item-subtitle" v-else>
@@ -213,6 +216,15 @@
               v-model="newSiteName"
               type="text"
               placeholder="请输入网站名称"
+              @keyup.enter="createSite"
+            />
+          </div>
+          <div class="input-group">
+            <label>网站描述</label>
+            <input
+              v-model="newSiteDesc"
+              type="text"
+              placeholder="请输入网站描述（可选）"
               @keyup.enter="createSite"
             />
           </div>
@@ -391,8 +403,9 @@ export default {
   data() {
     return {
       currentView: 'sites',
-      sites: [], // 改为存储网站对象数组 {name, url}
+      sites: [], // 改为存储网站对象数组 {name, url, desc}
       newSiteName: '',
+      newSiteDesc: '',
       newSitePath: '',
       selectedSite: '',
       deployMessage: '',
@@ -484,7 +497,7 @@ export default {
       }
 
       try {
-        const site = await window.go.main.App.CreateSite(this.newSiteName)
+        const site = await window.go.main.App.CreateSite(this.newSiteName, this.newSiteDesc)
         await window.go.main.App.BindSiteDirectory(this.newSiteName, this.newSitePath.trim())
 
         if (this.config.site_paths) {
@@ -493,6 +506,7 @@ export default {
 
         this.showMessage('网站创建成功! 域名: ' + site.domain, 'success')
         this.newSiteName = ''
+        this.newSiteDesc = ''
         this.newSitePath = ''
         this.closeCreateSiteModal()
         await this.loadSites()
@@ -523,6 +537,7 @@ export default {
     closeCreateSiteModal() {
       this.showCreateSiteModal = false
       this.newSiteName = ''
+      this.newSiteDesc = ''
       this.newSitePath = ''
     },
 

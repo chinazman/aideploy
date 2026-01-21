@@ -551,6 +551,7 @@ func (s *DeployServer) handleCreateSite(w http.ResponseWriter, r *http.Request) 
 		"name":       name,
 		"domain":     domain,
 		"path":       sitePath,
+		"desc":       req.Desc,
 		"url":        url,
 		"created_at": time.Now().Format("2006-01-02 15:04:05"),
 		"updated_at": time.Now().Format("2006-01-02 15:04:05"),
