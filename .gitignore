@@ -40,6 +40,10 @@ Thumbs.db
 *.temp
 deploy-*.tmp
 
+# Python 缓存
+__pycache__/
+*.pyc
+
 # Node.js (frontend)
 client/frontend/node_modules/
 client/frontend/dist/
